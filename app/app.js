@@ -100,6 +100,14 @@
     });
   }
 
+  function configHeaderIndex() {
+    var index;
+    for (index = 0; index < headerButtons.length; index += 1) {
+      if (headerButtons[index].getAttribute("data-action") === "config") return index;
+    }
+    return 0;
+  }
+
   function selectHeader(index, focus) {
     if (!headerButtons.length || moveMode) return;
     selectedArea = "header";
@@ -133,7 +141,7 @@
   function closeSettings() {
     settingsOpen = false;
     settingsElement.hidden = true;
-    selectHeader(0, true);
+    selectHeader(configHeaderIndex(), true);
   }
 
   function toggleTimeFormat() {
@@ -216,6 +224,7 @@
       function (response) {
         var result;
         var inputs;
+        var configButton = topActionsElement.querySelector("[data-action='config']");
         var oldButtons = topActionsElement.querySelectorAll("[data-dynamic-input]");
         var index;
         try {
@@ -235,7 +244,7 @@
           button.setAttribute("data-app-id", String(input.id || ""));
           button.setAttribute("data-title", String(input.title || "Input"));
           button.textContent = String(input.title || "Input");
-          topActionsElement.appendChild(button);
+          topActionsElement.insertBefore(button, configButton);
         });
         wireHeaderButtons();
         selectedHeaderIndex = Math.min(selectedHeaderIndex, headerButtons.length - 1);
