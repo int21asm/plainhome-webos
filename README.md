@@ -18,6 +18,16 @@ PlainHome currently requires a **rooted webOS TV with Homebrew Channel installed
 
 Unrooted TVs are not supported by the current release.
 
+## Tested on
+
+PlainHome has been developed and tested on:
+
+- TV: LG OLED B3 (`OLED77B36LA`)
+- webOS core release: `10.3.1-3001`
+- Firmware: `33.31.61`
+
+Other rooted LG webOS models and releases may work, but have not yet been verified.
+
 ## Build
 
 Run:
