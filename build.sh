@@ -3,14 +3,23 @@ set -eu
 
 PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR="$PROJECT_DIR/app"
+SERVICE_DIR="$PROJECT_DIR/service"
 DIST_DIR="$PROJECT_DIR/dist"
 PACKAGE_ID="com.github.int21asm.plainhome"
-VERSION="0.1.22"
+SERVICE_ID="com.github.int21asm.plainhome.service"
+VERSION="0.1.34"
 OUTPUT="$DIST_DIR/${PACKAGE_ID}_${VERSION}_all.ipk"
 
 for file in appinfo.json index.html style.css app.js icon-copy.js input-reader.js icon80.png icon130.png; do
   if [ ! -f "$APP_DIR/$file" ]; then
     echo "Missing required file: $APP_DIR/$file" >&2
+    exit 1
+  fi
+done
+
+for file in service.js autostart.sh package.json services.json; do
+  if [ ! -f "$SERVICE_DIR/$file" ]; then
+    echo "Missing required file: $SERVICE_DIR/$file" >&2
     exit 1
   fi
 done
@@ -21,6 +30,20 @@ trap 'rm -rf "$BUILD_TMP"' EXIT HUP INT TERM
 
 mkdir -p "$BUILD_TMP/data/usr/palm/applications/$PACKAGE_ID"
 cp -R "$APP_DIR"/. "$BUILD_TMP/data/usr/palm/applications/$PACKAGE_ID/"
+mkdir -p "$BUILD_TMP/data/usr/palm/services/$SERVICE_ID"
+cp -R "$SERVICE_DIR"/. "$BUILD_TMP/data/usr/palm/services/$SERVICE_ID/"
+chmod 755 "$BUILD_TMP/data/usr/palm/services/$SERVICE_ID/autostart.sh"
+mkdir -p "$BUILD_TMP/data/usr/palm/packages/$PACKAGE_ID"
+printf '%s\n' \
+  '{' \
+  "  \"id\": \"$PACKAGE_ID\"," \
+  "  \"version\": \"$VERSION\"," \
+  "  \"app\": \"$PACKAGE_ID\"," \
+  '  "services": [' \
+  "    \"$SERVICE_ID\"" \
+  '  ]' \
+  '}' \
+  > "$BUILD_TMP/data/usr/palm/packages/$PACKAGE_ID/packageinfo.json"
 
 INSTALLED_SIZE=$(du -sk "$BUILD_TMP/data" | awk '{print $1}')
 printf '%s\n' \

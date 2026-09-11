@@ -5,10 +5,14 @@
   var COLUMNS = 6;
   var ORDER_KEY = "plainHomeOrderV1";
   var TIME_FORMAT_KEY = "plainHomeTimeFormatV1";
+  var DATE_FORMAT_KEY = "plainHomeDateFormatV1";
   var HIDDEN_APPS_KEY = "plainHomeHiddenAppsV1";
   var SORT_MODE_KEY = "plainHomeSortModeV1";
   var FOCUS_COLOR_KEY = "plainHomeFocusColorV1";
+  var BOX_COLOR_KEY = "plainHomeBoxColorV1";
   var CUSTOM_TEXT_KEY = "plainHomeCustomTextV1";
+  var STARTUP_HOOK = "/var/lib/webosbrew/init.d/60-plainhome";
+  var STARTUP_CONFIG = "/var/lib/webosbrew/plainhome.conf";
   var FOCUS_COLORS = [
     { id: "white", label: "White", value: "#ffffff" },
     { id: "blue", label: "Blue", value: "#38a7ff" },
@@ -16,6 +20,12 @@
     { id: "yellow", label: "Yellow", value: "#ffd400" },
     { id: "red", label: "Red", value: "#ff5252" },
     { id: "pink", label: "Pink", value: "#ff62c7" }
+  ];
+  var BOX_COLORS = [
+    { id: "oled", label: "OLED Black", value: "#000000", focus: "#000000" },
+    { id: "dark", label: "Dark Gray", value: "#101010", focus: "#242424" },
+    { id: "charcoal", label: "Charcoal", value: "#202020", focus: "#303030" },
+    { id: "navy", label: "Dark Navy", value: "#07111f", focus: "#10243c" }
   ];
   var LONG_PRESS_MS = 700;
   var appsElement = document.getElementById("apps");
@@ -30,11 +40,15 @@
   var topActionsElement = document.getElementById("top-actions");
   var settingsElement = document.getElementById("settings");
   var timeFormatButton = document.getElementById("time-format");
+  var dateFormatButton = document.getElementById("date-format");
   var sortModeButton = document.getElementById("sort-mode");
   var resetOrderButton = document.getElementById("reset-order");
   var focusColorButton = document.getElementById("focus-color");
+  var boxColorButton = document.getElementById("box-color");
   var editCustomTextButton = document.getElementById("edit-custom-text");
   var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
+  var startupButton = document.getElementById("startup");
+  var homeButtonSetting = document.getElementById("home-button");
   var hiddenAppsElement = document.getElementById("hidden-apps");
   var hiddenAppListElement = document.getElementById("hidden-app-list");
   var customTextEditorElement = document.getElementById("custom-text-editor");
@@ -70,9 +84,15 @@
   var textEditorControls = [customTextInput, saveCustomTextButton, clearCustomTextButton];
   var hiddenAppKeys = readHiddenAppKeys();
   var timeFormat = readTimeFormat();
+  var dateFormat = readDateFormat();
   var sortMode = readSortMode();
   var focusColor = readFocusColor();
+  var boxColor = readBoxColor();
   var customText = readCustomText();
+  var startupEnabled = false;
+  var startupBusy = false;
+  var homeButtonEnabled = false;
+  var homeButtonBusy = false;
 
   function showStatus(message) {
     statusElement.textContent = message;
@@ -93,8 +113,10 @@
   }
 
   function readTimeFormat() {
+    var value;
     try {
-      return window.localStorage.getItem(TIME_FORMAT_KEY) === "12" ? "12" : "24";
+      value = String(window.localStorage.getItem(TIME_FORMAT_KEY) || "24");
+      return value === "12" || value === "off" ? value : "24";
     } catch (error) {
       return "24";
     }
@@ -105,6 +127,27 @@
       window.localStorage.setItem(TIME_FORMAT_KEY, timeFormat);
     } catch (error) {
       showNotice("The time format changed, but webOS could not save it.");
+    }
+  }
+
+  function readDateFormat() {
+    var value;
+    try {
+      value = String(window.localStorage.getItem(DATE_FORMAT_KEY) || "day-month");
+      if (value === "month-day" || value === "dmy" || value === "mdy" || value === "off") {
+        return value;
+      }
+      return "day-month";
+    } catch (error) {
+      return "day-month";
+    }
+  }
+
+  function saveDateFormat() {
+    try {
+      window.localStorage.setItem(DATE_FORMAT_KEY, dateFormat);
+    } catch (error) {
+      showNotice("The date format changed, but webOS could not save it.");
     }
   }
 
@@ -173,6 +216,36 @@
     }
   }
 
+  function readBoxColor() {
+    var value;
+    var index;
+    try {
+      value = String(window.localStorage.getItem(BOX_COLOR_KEY) || "oled");
+    } catch (error) {
+      return "oled";
+    }
+    for (index = 0; index < BOX_COLORS.length; index += 1) {
+      if (BOX_COLORS[index].id === value) return value;
+    }
+    return "oled";
+  }
+
+  function boxColorDetails() {
+    var index;
+    for (index = 0; index < BOX_COLORS.length; index += 1) {
+      if (BOX_COLORS[index].id === boxColor) return BOX_COLORS[index];
+    }
+    return BOX_COLORS[0];
+  }
+
+  function saveBoxColor() {
+    try {
+      window.localStorage.setItem(BOX_COLOR_KEY, boxColor);
+    } catch (error) {
+      showNotice("The tile background changed, but webOS could not save it.");
+    }
+  }
+
   function readCustomText() {
     try {
       return String(window.localStorage.getItem(CUSTOM_TEXT_KEY) || "").slice(0, 80);
@@ -193,6 +266,12 @@
     document.documentElement.style.setProperty("--focus-color", focusColorDetails().value);
   }
 
+  function applyBoxColor() {
+    var details = boxColorDetails();
+    document.documentElement.style.setProperty("--box-color", details.value);
+    document.documentElement.style.setProperty("--box-focus-color", details.focus);
+  }
+
   function isHidden(point) {
     return hiddenAppKeys.indexOf(keyFor(point)) !== -1;
   }
@@ -204,7 +283,18 @@
   }
 
   function updateTimeFormatButton() {
-    timeFormatButton.textContent = "Time format: " + (timeFormat === "12" ? "AM/PM" : "24 hours");
+    var title = timeFormat === "12" ? "AM/PM" : "24 hours";
+    if (timeFormat === "off") title = "Off";
+    timeFormatButton.textContent = "Time: " + title;
+  }
+
+  function updateDateFormatButton() {
+    var title = "Day Month Year";
+    if (dateFormat === "month-day") title = "Month Day, Year";
+    else if (dateFormat === "dmy") title = "DD/MM/YYYY";
+    else if (dateFormat === "mdy") title = "MM/DD/YYYY";
+    else if (dateFormat === "off") title = "Off";
+    dateFormatButton.textContent = "Date: " + title;
   }
 
   function updateManageHiddenAppsButton() {
@@ -225,10 +315,183 @@
     focusColorButton.textContent = "Focus border: " + focusColorDetails().label;
   }
 
+  function updateBoxColorButton() {
+    boxColorButton.textContent = "Tile background: " + boxColorDetails().label;
+  }
+
   function updateCustomText() {
     customTextElement.textContent = customText;
     customTextElement.hidden = customText.length === 0;
     editCustomTextButton.textContent = customText ? "Custom text: " + customText : "Custom text: None";
+  }
+
+  function updateStartupButton(checking) {
+    if (checking) startupButton.textContent = "Open at TV startup: Checking…";
+    else startupButton.textContent = "Open at TV startup: " + (startupEnabled ? "On" : "Off");
+  }
+
+  function updateHomeButtonSetting(checking) {
+    if (checking) homeButtonSetting.textContent = "Home button opens PlainHome: Checking…";
+    else homeButtonSetting.textContent =
+      "Home button opens PlainHome: " + (homeButtonEnabled ? "On" : "Off");
+  }
+
+  function serviceDirectoryCommand() {
+    return "SVCDIR=''; for d in " +
+      "/media/developer/apps/usr/palm/services/com.github.int21asm.plainhome.service " +
+      "/media/cryptofs/apps/usr/palm/services/com.github.int21asm.plainhome.service; do " +
+      "if [ -f \"$d/autostart.sh\" ]; then SVCDIR=\"$d\"; break; fi; done; ";
+  }
+
+  function stopWatcherCommand() {
+    return "for PID_FILE in /tmp/plainhome-service.pid /tmp/plainhome-power.pid; do " +
+      "if [ -f \"$PID_FILE\" ]; then PID=$(cat \"$PID_FILE\"); " +
+      "case \"$PID\" in ''|*[!0-9]*) ;; *) kill \"$PID\" 2>/dev/null || true ;; esac; " +
+      "rm -f \"$PID_FILE\"; fi; done; ";
+  }
+
+  function refreshStartupState() {
+    updateStartupButton(true);
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      {
+        command: "if [ -L " + STARTUP_HOOK + " ] && [ -f " + STARTUP_CONFIG +
+          " ] && grep -q '^boot=1$' " + STARTUP_CONFIG +
+          "; then printf enabled; else printf disabled; fi"
+      },
+      function (response) {
+        startupEnabled = String(response.stdoutString || "").indexOf("enabled") !== -1;
+        updateStartupButton(false);
+      },
+      function () {
+        startupEnabled = false;
+        updateStartupButton(false);
+      }
+    );
+  }
+
+  function refreshHomeButtonState() {
+    updateHomeButtonSetting(true);
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      {
+        command: "if [ -L " + STARTUP_HOOK + " ] && [ -f " + STARTUP_CONFIG +
+          " ] && grep -q '^home=1$' " + STARTUP_CONFIG +
+          "; then printf enabled; else printf disabled; fi"
+      },
+      function (response) {
+        homeButtonEnabled = String(response.stdoutString || "").indexOf("enabled") !== -1;
+        updateHomeButtonSetting(false);
+      },
+      function () {
+        homeButtonEnabled = false;
+        updateHomeButtonSetting(false);
+      }
+    );
+  }
+
+  function toggleStartup() {
+    var enabling;
+    var command;
+    if (startupBusy) return;
+    startupBusy = true;
+    enabling = !startupEnabled;
+    startupButton.textContent = "Open at TV startup: Saving…";
+    if (enabling) {
+      command =
+        serviceDirectoryCommand() +
+        "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
+        "HOME_VALUE=0; grep -q '^home=1$' " + STARTUP_CONFIG + " 2>/dev/null && HOME_VALUE=1; " +
+        "mkdir -p /var/lib/webosbrew/init.d; " +
+        "printf 'boot=1\\nhome=%s\\n' \"$HOME_VALUE\" > " + STARTUP_CONFIG + "; " +
+        "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
+        "\"$SVCDIR/autostart.sh\"; printf enabled";
+    } else {
+      command =
+        serviceDirectoryCommand() + stopWatcherCommand() +
+        "HOME_VALUE=0; grep -q '^home=1$' " + STARTUP_CONFIG + " 2>/dev/null && HOME_VALUE=1; " +
+        "if [ \"$HOME_VALUE\" = 1 ] && [ -n \"$SVCDIR\" ]; then " +
+        "printf 'boot=0\\nhome=1\\n' > " + STARTUP_CONFIG + "; " +
+        "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
+        "else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
+    }
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      { command: command },
+      function (response) {
+        var output = String(response.stdoutString || "");
+        startupBusy = false;
+        if (enabling && output.indexOf("enabled") === -1) {
+          updateStartupButton(false);
+          showNotice("Could not enable startup: the launcher service is missing.");
+          window.setTimeout(hideNotice, 3200);
+          return;
+        }
+        startupEnabled = enabling;
+        updateStartupButton(false);
+        showNotice("Open at TV startup is " + (startupEnabled ? "on." : "off."));
+        window.setTimeout(hideNotice, 2400);
+        selectSetting(selectedSettingsIndex, true);
+      },
+      function (message) {
+        startupBusy = false;
+        updateStartupButton(false);
+        showNotice("Could not change startup: " + message);
+        window.setTimeout(hideNotice, 3400);
+        selectSetting(selectedSettingsIndex, true);
+      }
+    );
+  }
+
+  function toggleHomeButton() {
+    var enabling;
+    var command;
+    if (homeButtonBusy) return;
+    homeButtonBusy = true;
+    enabling = !homeButtonEnabled;
+    homeButtonSetting.textContent = "Home button opens PlainHome: Saving…";
+    if (enabling) {
+      command = serviceDirectoryCommand() +
+        "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
+        "BOOT_VALUE=0; grep -q '^boot=1$' " + STARTUP_CONFIG + " 2>/dev/null && BOOT_VALUE=1; " +
+        "mkdir -p /var/lib/webosbrew/init.d; " +
+        "printf 'boot=%s\\nhome=1\\n' \"$BOOT_VALUE\" > " + STARTUP_CONFIG + "; " +
+        "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
+        "\"$SVCDIR/autostart.sh\"; printf enabled";
+    } else {
+      command = serviceDirectoryCommand() + stopWatcherCommand() +
+        "BOOT_VALUE=0; grep -q '^boot=1$' " + STARTUP_CONFIG + " 2>/dev/null && BOOT_VALUE=1; " +
+        "if [ \"$BOOT_VALUE\" = 1 ] && [ -n \"$SVCDIR\" ]; then " +
+        "printf 'boot=1\\nhome=0\\n' > " + STARTUP_CONFIG + "; " +
+        "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
+        "else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
+    }
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      { command: command },
+      function (response) {
+        var output = String(response.stdoutString || "");
+        homeButtonBusy = false;
+        if (enabling && output.indexOf("enabled") === -1) {
+          updateHomeButtonSetting(false);
+          showNotice("Could not enable Home button: the watcher is missing.");
+          window.setTimeout(hideNotice, 3200);
+          return;
+        }
+        homeButtonEnabled = enabling;
+        updateHomeButtonSetting(false);
+        showNotice("Home button takeover is " + (homeButtonEnabled ? "on." : "off."));
+        window.setTimeout(hideNotice, 2400);
+        selectSetting(selectedSettingsIndex, true);
+      },
+      function (message) {
+        homeButtonBusy = false;
+        updateHomeButtonSetting(false);
+        showNotice("Could not change Home button: " + message);
+        window.setTimeout(hideNotice, 3400);
+        selectSetting(selectedSettingsIndex, true);
+      }
+    );
   }
 
   function updateClock() {
@@ -236,25 +499,29 @@
     var monthName;
     var dateMonth;
     var dateDay;
-    try {
-      clockElement.textContent = now.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: timeFormat === "12"
-      });
-    } catch (error) {
-      var hourValue = now.getHours();
-      var suffix = "";
-      if (timeFormat === "12") {
-        suffix = hourValue >= 12 ? " PM" : " AM";
-        hourValue = hourValue % 12 || 12;
+    clockElement.hidden = timeFormat === "off";
+    if (timeFormat !== "off") {
+      try {
+        clockElement.textContent = now.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: timeFormat === "12"
+        });
+      } catch (error) {
+        var hourValue = now.getHours();
+        var suffix = "";
+        if (timeFormat === "12") {
+          suffix = hourValue >= 12 ? " PM" : " AM";
+          hourValue = hourValue % 12 || 12;
+        }
+        var hours = String(hourValue);
+        var minutes = String(now.getMinutes());
+        clockElement.textContent = (hours.length < 2 ? "0" : "") + hours + ":" +
+          (minutes.length < 2 ? "0" : "") + minutes + suffix;
       }
-      var hours = String(hourValue);
-      var minutes = String(now.getMinutes());
-      clockElement.textContent = (hours.length < 2 ? "0" : "") + hours + ":" +
-        (minutes.length < 2 ? "0" : "") + minutes + suffix;
+      clockElement.setAttribute("datetime", now.toISOString());
     }
-    clockElement.setAttribute("datetime", now.toISOString());
+    dateElement.hidden = dateFormat === "off";
     try {
       monthName = now.toLocaleDateString([], { month: "long" });
     } catch (error) {
@@ -263,9 +530,19 @@
         "July", "August", "September", "October", "November", "December"
       ][now.getMonth()];
     }
-    dateElement.textContent = now.getDate() + " " + monthName + " " + now.getFullYear();
     dateMonth = String(now.getMonth() + 1);
     dateDay = String(now.getDate());
+    if (dateFormat === "month-day") {
+      dateElement.textContent = monthName + " " + now.getDate() + ", " + now.getFullYear();
+    } else if (dateFormat === "dmy") {
+      dateElement.textContent = (dateDay.length < 2 ? "0" : "") + dateDay + "/" +
+        (dateMonth.length < 2 ? "0" : "") + dateMonth + "/" + now.getFullYear();
+    } else if (dateFormat === "mdy") {
+      dateElement.textContent = (dateMonth.length < 2 ? "0" : "") + dateMonth + "/" +
+        (dateDay.length < 2 ? "0" : "") + dateDay + "/" + now.getFullYear();
+    } else {
+      dateElement.textContent = now.getDate() + " " + monthName + " " + now.getFullYear();
+    }
     dateElement.setAttribute(
       "datetime",
       now.getFullYear() + "-" + (dateMonth.length < 2 ? "0" : "") + dateMonth +
@@ -313,10 +590,14 @@
   function openSettings() {
     settingsOpen = true;
     updateTimeFormatButton();
+    updateDateFormatButton();
     updateSortModeButton();
     updateFocusColorButton();
+    updateBoxColorButton();
     updateCustomText();
     updateManageHiddenAppsButton();
+    refreshStartupState();
+    refreshHomeButtonState();
     settingsElement.hidden = false;
     selectSetting(selectedSettingsIndex, true);
   }
@@ -339,11 +620,15 @@
   function activateSetting() {
     var button = settingsButtons[selectedSettingsIndex];
     if (button === timeFormatButton) toggleTimeFormat();
+    else if (button === dateFormatButton) toggleDateFormat();
     else if (button === sortModeButton) toggleSortMode();
     else if (button === resetOrderButton) requestOrderReset();
     else if (button === focusColorButton) toggleFocusColor();
+    else if (button === boxColorButton) toggleBoxColor();
     else if (button === editCustomTextButton) openCustomTextEditor();
     else if (button === manageHiddenAppsButton) openHiddenApps();
+    else if (button === startupButton) toggleStartup();
+    else if (button === homeButtonSetting) toggleHomeButton();
   }
 
   function selectTextEditorControl(index, focus) {
@@ -443,6 +728,19 @@
     selectSetting(selectedSettingsIndex, true);
   }
 
+  function toggleBoxColor() {
+    var currentIndex = 0;
+    var index;
+    for (index = 0; index < BOX_COLORS.length; index += 1) {
+      if (BOX_COLORS[index].id === boxColor) currentIndex = index;
+    }
+    boxColor = BOX_COLORS[(currentIndex + 1) % BOX_COLORS.length].id;
+    saveBoxColor();
+    applyBoxColor();
+    updateBoxColorButton();
+    selectSetting(selectedSettingsIndex, true);
+  }
+
   function updateHiddenAppButton(button, point) {
     var hidden = isHidden(point);
     button.textContent = (hidden ? "Hidden — " : "Shown — ") + titleFor(point);
@@ -532,10 +830,25 @@
   }
 
   function toggleTimeFormat() {
-    timeFormat = timeFormat === "24" ? "12" : "24";
+    if (timeFormat === "24") timeFormat = "12";
+    else if (timeFormat === "12") timeFormat = "off";
+    else timeFormat = "24";
     saveTimeFormat();
     updateTimeFormatButton();
     updateClock();
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function toggleDateFormat() {
+    if (dateFormat === "day-month") dateFormat = "month-day";
+    else if (dateFormat === "month-day") dateFormat = "dmy";
+    else if (dateFormat === "dmy") dateFormat = "mdy";
+    else if (dateFormat === "mdy") dateFormat = "off";
+    else dateFormat = "day-month";
+    saveDateFormat();
+    updateDateFormatButton();
+    updateClock();
+    selectSetting(selectedSettingsIndex, true);
   }
 
   function wireHeaderButtons() {
@@ -558,9 +871,12 @@
 
   function setupHeader() {
     applyFocusColor();
+    applyBoxColor();
     updateTimeFormatButton();
+    updateDateFormatButton();
     updateSortModeButton();
     updateFocusColorButton();
+    updateBoxColorButton();
     updateCustomText();
     updateManageHiddenAppsButton();
     updateClock();
@@ -882,6 +1198,14 @@
   }
 
   function hydrateLocalIcons(points, done) {
+    var completed = false;
+    var timeout;
+    function finish() {
+      if (completed) return;
+      completed = true;
+      if (timeout) window.clearTimeout(timeout);
+      done();
+    }
     var requests = points.slice(0, 512).map(function (point) {
       return {
         key: String(point.launchPointId || idFor(point)),
@@ -900,6 +1224,9 @@
       "if [ -f \"$p\" ]; then exec node \"$p\" '" + encoded + "'; fi; done; " +
       "printf '{\"icons\":{}}'";
 
+    showStatus("Loading app icons…");
+    timeout = window.setTimeout(finish, 6000);
+
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
       { command: command },
@@ -910,16 +1237,16 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.22";
+              point._localIcon = icons[key] + "?v=0.1.34";
             }
           });
         } catch (error) {
           /* Keep the initial fallback when icon hydration fails. */
         }
-        done();
+        finish();
       },
       function () {
-        done();
+        finish();
       }
     );
   }
@@ -937,10 +1264,10 @@
     showStatus("Refreshing PlainHome access…");
 
     var permissionFile =
-      "{\"com.github.int21asm.plainhome-*\":[\"public\",\"applications.launch\",\"applications.internal\"]}";
+      "{\"com.github.int21asm.plainhome-*\":[\"public\",\"applications.launch\",\"applications.internal\",\"com.github.int21asm.plainhome.service.group\"]}";
     var command =
       "for d in /var/luna-service2-dev/client-permissions.d /var/luna-service2/client-permissions.d; do " +
-      "if [ -d \"$d\" ] && [ ! -f \"$d/com.github.int21asm.plainhome.app.json\" ]; then " +
+      "if [ -d \"$d\" ]; then " +
       "printf '%s\\n' '" + permissionFile +
       "' > \"$d/com.github.int21asm.plainhome.app.json\"; fi; done; " +
       "ls-control scan-services";

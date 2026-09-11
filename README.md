@@ -9,11 +9,11 @@ A deliberately minimal launcher for LG webOS TVs:
 - Custom, LG-order, and alphabetical sorting, with a reset-to-LG-order action
 - persistent hide/unhide controls for installed apps
 - guarded removal of apps that webOS explicitly marks removable
-- scrollable top bar with a live clock, localized date, custom text, connected named HDMI inputs, and a Config menu
-- persistent 24-hour or AM/PM clock setting
-- persistent focus-border color selection
+- scrollable top bar with a clock, date, custom text, connected named HDMI inputs, and a Config menu
+- independently configurable time and date formats, with an option to hide either one
+- persistent focus-border and tile-background color selection; tile backgrounds default to OLED black
+- optional launch at TV startup and optional Home-button takeover
 - D-pad, Enter, Back, Magic Remote pointer and wheel scrolling
-- no boot hook and no Home-button replacement
 
 ![PlainHome showing installed applications and connected inputs](docs/screenshot.jpg)
 
@@ -49,9 +49,11 @@ Install the IPK using webOS Dev Manager, then launch **PlainHome** from the norm
 
 Alternatively, run `./deploy-tv.sh`. It prompts for the TV address, SSH password and version, uploads and installs that IPK, then keeps only the two highest PlainHome IPK versions in the TV's `/tmp`. Values may also be supplied through `TV_HOST`, `TV_USER`, and `TV_PASSWORD` environment variables.
 
-The app first requests the catalog directly. On firmware that blocks the request, it uses the rooted Homebrew Channel's documented `/exec` helper once to register the narrow Luna permissions required by this app. It creates `com.github.int21asm.plainhome.app.json` in the TV's existing Luna client-permissions directories, rescans Luna manifests, and restarts only PlainHome. It does not add a boot hook or modify system application files.
+The app first requests the catalog directly. On firmware that blocks the request, it uses the rooted Homebrew Channel's documented `/exec` helper once to register the narrow Luna permissions required by this app. It creates `com.github.int21asm.plainhome.app.json` in the TV's existing Luna client-permissions directories, rescans Luna manifests, and restarts only PlainHome. It does not modify system application files.
 
 Because webOS blocks one app from reading another app's icon, the Homebrew helper also runs the bundled `icon-copy.js`. That helper accepts only icon files contained in known webOS application roots, limits files to 2 MB, and copies them into PlainHome's own `icons/` directory. No system-owned file is changed.
+
+The startup and Home-button features are disabled until enabled in Config. Enabling either feature creates `/var/lib/webosbrew/plainhome.conf` and a symlink in `/var/lib/webosbrew/init.d/` to PlainHome's packaged startup script. Startup detection subscribes to the TV power state. Home-button takeover reads Linux input events without grabbing or blocking the input device, then asks webOS to launch PlainHome after a Home press. Disable both options to remove the hook and configuration file.
 
 ## Controls
 
@@ -63,7 +65,18 @@ Because webOS blocks one app from reading another app's icon, the Homebrew helpe
 - Back: close PlainHome
 - Magic Remote pointer: point and click
 
-The Config menu provides time format, sort mode, custom-order reset, focus-border color, custom header text, and hide/unhide controls. Custom header text is empty by default.
+The Config menu provides:
+
+- time format: 24 hours, AM/PM, or Off
+- date format: Day Month Year, Month Day, Year, DD/MM/YYYY, MM/DD/YYYY, or Off
+- Custom, LG-order, and alphabetical sort modes
+- custom-order reset
+- focus-border color
+- tile-background color, defaulting to OLED black
+- optional custom header text, empty by default
+- app hide/unhide controls
+- optional launch at TV startup
+- optional Home-button takeover
 
 ## Development disclosure
 

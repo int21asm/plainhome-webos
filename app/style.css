@@ -1,5 +1,7 @@
 :root {
   --focus-color: #fff;
+  --box-color: #000;
+  --box-focus-color: #000;
   color-scheme: dark;
   font-family: "LG Smart UI", "Helvetica Neue", Arial, sans-serif;
   background: #000;
@@ -68,6 +70,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+#clock[hidden],
+#date[hidden] {
+  display: none;
+}
+
 #custom-text {
   flex: 0 1 520px;
   max-width: 520px;
@@ -132,7 +139,7 @@ body {
   border: 4px solid transparent;
   border-radius: 20px;
   outline: none;
-  background: #101010;
+  background: var(--box-color);
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -147,7 +154,7 @@ body {
 .app.selected {
   z-index: 1;
   border-color: var(--focus-color);
-  background: #242424;
+  background: var(--box-focus-color);
   transform: scale(1.04);
 }
 
@@ -291,23 +298,24 @@ body {
 
 .settings-panel {
   width: 780px;
-  padding: 46px 54px 38px;
+  max-height: 920px;
+  padding: 32px 54px 26px;
   border: 3px solid #fff;
   border-radius: 22px;
   background: #171717;
 }
 
 .settings-panel h1 {
-  margin: 0 0 34px;
+  margin: 0 0 22px;
   font-size: 44px;
   text-align: center;
 }
 
 .settings-option {
   width: 100%;
-  min-height: 70px;
-  margin-bottom: 14px;
-  padding: 10px 20px;
+  min-height: 58px;
+  margin-bottom: 6px;
+  padding: 4px 20px;
   border: 3px solid transparent;
   border-radius: 14px;
   outline: none;
@@ -433,14 +441,14 @@ body {
 }
 
 #app-version {
-  margin: 38px 0 0;
+  margin: 20px 0 0;
   color: #aaa;
   font-size: 28px;
   text-align: center;
 }
 
 .settings-help {
-  margin: 22px 0 0;
+  margin: 14px 0 0;
   color: #cfcfcf;
   font-size: 27px;
   text-align: center;

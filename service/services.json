@@ -1,0 +1,9 @@
+{
+  "id": "com.github.int21asm.plainhome.service",
+  "description": "PlainHome startup launcher",
+  "services": [
+    {
+      "name": "com.github.int21asm.plainhome.service"
+    }
+  ]
+}

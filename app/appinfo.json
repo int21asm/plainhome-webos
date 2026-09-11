@@ -1,6 +1,6 @@
 {
   "id": "com.github.int21asm.plainhome",
-  "version": "0.1.22",
+  "version": "0.1.34",
   "vendor": "Local",
   "type": "web",
   "main": "index.html",
@@ -16,6 +16,11 @@
   "visible": true,
   "requiredPermissions": [
     "public",
+    "applications.launch",
+    "applications.internal",
+    "org.webosbrew.hbchannel.service.group"
+  ],
+  "requiredACG": [
     "applications.launch",
     "applications.internal",
     "org.webosbrew.hbchannel.service.group"
