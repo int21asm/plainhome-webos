@@ -5,7 +5,7 @@ PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR="$PROJECT_DIR/app"
 DIST_DIR="$PROJECT_DIR/dist"
 PACKAGE_ID="com.github.int21asm.plainhome"
-VERSION="0.1.15"
+VERSION="0.1.17"
 OUTPUT="$DIST_DIR/${PACKAGE_ID}_${VERSION}_all.ipk"
 
 for file in appinfo.json index.html style.css app.js icon-copy.js input-reader.js icon80.png icon130.png; do

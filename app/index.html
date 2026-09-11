@@ -28,9 +28,17 @@
     <div id="settings" hidden>
       <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <h1 id="settings-title">Settings</h1>
-        <button id="time-format" type="button" tabindex="-1"></button>
-        <p id="app-version">PlainHome 0.1.15</p>
-        <p class="settings-help">OK: change&nbsp;&nbsp;&nbsp; Back: close</p>
+        <button id="time-format" class="settings-option" type="button" tabindex="-1"></button>
+        <button id="manage-hidden-apps" class="settings-option" type="button" tabindex="-1"></button>
+        <p id="app-version">PlainHome 0.1.17</p>
+        <p class="settings-help">Up/Down: select&nbsp;&nbsp;&nbsp; OK: open/change&nbsp;&nbsp;&nbsp; Back: close</p>
+      </section>
+    </div>
+    <div id="hidden-apps" hidden>
+      <section class="hidden-apps-panel" role="dialog" aria-modal="true" aria-labelledby="hidden-apps-title">
+        <h1 id="hidden-apps-title">Show or hide apps</h1>
+        <div id="hidden-app-list"></div>
+        <p class="settings-help">OK: show/hide&nbsp;&nbsp;&nbsp; Back: settings</p>
       </section>
     </div>
     <script src="app.js"></script>

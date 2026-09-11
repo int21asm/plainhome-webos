@@ -5,6 +5,7 @@
   var COLUMNS = 6;
   var ORDER_KEY = "plainHomeOrderV1";
   var TIME_FORMAT_KEY = "plainHomeTimeFormatV1";
+  var HIDDEN_APPS_KEY = "plainHomeHiddenAppsV1";
   var LONG_PRESS_MS = 700;
   var appsElement = document.getElementById("apps");
   var statusElement = document.getElementById("status");
@@ -15,7 +16,12 @@
   var topActionsElement = document.getElementById("top-actions");
   var settingsElement = document.getElementById("settings");
   var timeFormatButton = document.getElementById("time-format");
+  var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
+  var hiddenAppsElement = document.getElementById("hidden-apps");
+  var hiddenAppListElement = document.getElementById("hidden-app-list");
   var headerButtons = Array.prototype.slice.call(document.querySelectorAll("#top-actions button"));
+  var settingsButtons = Array.prototype.slice.call(document.querySelectorAll(".settings-option"));
+  var catalogPoints = [];
   var launchPoints = [];
   var buttons = [];
   var selectedIndex = 0;
@@ -31,6 +37,11 @@
   var refreshSelectionKey = "";
   var refreshSelectionIndex = 0;
   var settingsOpen = false;
+  var selectedSettingsIndex = 0;
+  var hiddenAppsOpen = false;
+  var hiddenAppButtons = [];
+  var selectedHiddenAppIndex = 0;
+  var hiddenAppKeys = readHiddenAppKeys();
   var timeFormat = readTimeFormat();
 
   function showStatus(message) {
@@ -67,8 +78,39 @@
     }
   }
 
+  function readHiddenAppKeys() {
+    try {
+      var value = JSON.parse(window.localStorage.getItem(HIDDEN_APPS_KEY) || "[]");
+      return Array.isArray(value) ? value.map(String) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveHiddenAppKeys() {
+    try {
+      window.localStorage.setItem(HIDDEN_APPS_KEY, JSON.stringify(hiddenAppKeys));
+    } catch (error) {
+      showNotice("The hidden-app list changed, but webOS could not save it.");
+    }
+  }
+
+  function isHidden(point) {
+    return hiddenAppKeys.indexOf(keyFor(point)) !== -1;
+  }
+
+  function visibleCatalogPoints() {
+    return catalogPoints.filter(function (point) {
+      return !isHidden(point);
+    });
+  }
+
   function updateTimeFormatButton() {
     timeFormatButton.textContent = "Time format: " + (timeFormat === "12" ? "AM/PM" : "24 hours");
+  }
+
+  function updateManageHiddenAppsButton() {
+    manageHiddenAppsButton.textContent = "Show/hide apps: " + hiddenAppKeys.length + " hidden";
   }
 
   function updateClock() {
@@ -134,14 +176,118 @@
   function openSettings() {
     settingsOpen = true;
     updateTimeFormatButton();
+    updateManageHiddenAppsButton();
     settingsElement.hidden = false;
-    timeFormatButton.focus();
+    selectSetting(selectedSettingsIndex, true);
   }
 
   function closeSettings() {
     settingsOpen = false;
     settingsElement.hidden = true;
     selectHeader(configHeaderIndex(), true);
+  }
+
+  function selectSetting(index, focus) {
+    selectedSettingsIndex = Math.max(0, Math.min(settingsButtons.length - 1, index));
+    settingsButtons.forEach(function (button, buttonIndex) {
+      if (buttonIndex === selectedSettingsIndex) button.classList.add("selected");
+      else button.classList.remove("selected");
+    });
+    if (focus !== false) settingsButtons[selectedSettingsIndex].focus();
+  }
+
+  function activateSetting() {
+    var button = settingsButtons[selectedSettingsIndex];
+    if (button === timeFormatButton) toggleTimeFormat();
+    else if (button === manageHiddenAppsButton) openHiddenApps();
+  }
+
+  function updateHiddenAppButton(button, point) {
+    var hidden = isHidden(point);
+    button.textContent = (hidden ? "Hidden — " : "Shown — ") + titleFor(point);
+    button.setAttribute("aria-pressed", hidden ? "true" : "false");
+    if (hidden) button.classList.add("is-hidden");
+    else button.classList.remove("is-hidden");
+  }
+
+  function selectHiddenApp(index, focus) {
+    if (!hiddenAppButtons.length) return;
+    selectedHiddenAppIndex = Math.max(0, Math.min(hiddenAppButtons.length - 1, index));
+    hiddenAppButtons.forEach(function (button, buttonIndex) {
+      if (buttonIndex === selectedHiddenAppIndex) button.classList.add("selected");
+      else button.classList.remove("selected");
+    });
+    if (focus !== false) hiddenAppButtons[selectedHiddenAppIndex].focus();
+    hiddenAppButtons[selectedHiddenAppIndex].scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  function renderHiddenApps() {
+    hiddenAppListElement.textContent = "";
+    hiddenAppButtons = [];
+    catalogPoints.forEach(function (point) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.tabIndex = -1;
+      button.className = "hidden-app-option";
+      updateHiddenAppButton(button, point);
+      button.addEventListener("click", function () {
+        var index = hiddenAppButtons.indexOf(button);
+        if (index < 0) return;
+        selectHiddenApp(index, false);
+        toggleHiddenApp(index);
+      });
+      button.addEventListener("mouseover", function () {
+        var index = hiddenAppButtons.indexOf(button);
+        if (index >= 0) selectHiddenApp(index, false);
+      });
+      hiddenAppButtons.push(button);
+      hiddenAppListElement.appendChild(button);
+    });
+  }
+
+  function openHiddenApps() {
+    hiddenAppsOpen = true;
+    renderHiddenApps();
+    hiddenAppsElement.hidden = false;
+    selectHiddenApp(selectedHiddenAppIndex, true);
+  }
+
+  function closeHiddenApps() {
+    var selectedKey = launchPoints[selectedIndex] ? keyFor(launchPoints[selectedIndex]) : "";
+    var preferredIndex = selectedIndex;
+    hiddenAppsOpen = false;
+    hiddenAppsElement.hidden = true;
+    visibleCatalogPoints().some(function (point, index) {
+      if (keyFor(point) !== selectedKey) return false;
+      preferredIndex = index;
+      return true;
+    });
+    render(visibleCatalogPoints(), preferredIndex);
+    updateManageHiddenAppsButton();
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function toggleHiddenApp(index) {
+    var point = catalogPoints[index];
+    var key;
+    var hiddenIndex;
+    if (!point) return;
+    key = keyFor(point);
+    hiddenIndex = hiddenAppKeys.indexOf(key);
+    if (hiddenIndex === -1) {
+      if (visibleCatalogPoints().length <= 1) {
+        showNotice("At least one app must remain visible.");
+        window.setTimeout(hideNotice, 2400);
+        return;
+      }
+      hiddenAppKeys.push(key);
+    } else {
+      hiddenAppKeys.splice(hiddenIndex, 1);
+    }
+    saveHiddenAppKeys();
+    updateHiddenAppButton(hiddenAppButtons[index], point);
+    updateManageHiddenAppsButton();
+    selectHiddenApp(index, true);
   }
 
   function toggleTimeFormat() {
@@ -171,10 +317,19 @@
 
   function setupHeader() {
     updateTimeFormatButton();
+    updateManageHiddenAppsButton();
     updateClock();
     window.setInterval(updateClock, 15000);
     wireHeaderButtons();
-    timeFormatButton.addEventListener("click", toggleTimeFormat);
+    settingsButtons.forEach(function (button, index) {
+      button.addEventListener("click", function () {
+        selectSetting(index, false);
+        activateSetting();
+      });
+      button.addEventListener("mouseover", function () {
+        selectSetting(index, false);
+      });
+    });
   }
 
   function lunaCall(uri, payload, onSuccess, onFailure) {
@@ -283,6 +438,17 @@
     } catch (error) {
       showNotice("The order changed, but webOS could not save it.");
     }
+  }
+
+  function saveVisibleOrder(points) {
+    var visibleIndex = 0;
+    catalogPoints = catalogPoints.map(function (point) {
+      if (isHidden(point)) return point;
+      var replacement = points[visibleIndex];
+      visibleIndex += 1;
+      return replacement || point;
+    });
+    saveOrder(catalogPoints);
   }
 
   function reconcileOrder(points) {
@@ -395,6 +561,8 @@
   function renderResponse(response) {
     var points = Array.isArray(response.launchPoints) ? response.launchPoints : [];
     var seen = {};
+    var availableKeys = {};
+    var previousHiddenCount = hiddenAppKeys.length;
     points = points.filter(function (point) {
       var id = idFor(point);
       var key = String(point.launchPointId || id);
@@ -403,17 +571,27 @@
       return true;
     });
     points = reconcileOrder(points);
+    points.forEach(function (point) {
+      availableKeys[keyFor(point)] = true;
+    });
+    hiddenAppKeys = hiddenAppKeys.filter(function (key) {
+      return availableKeys[key] === true;
+    });
+    if (hiddenAppKeys.length !== previousHiddenCount) saveHiddenAppKeys();
+    catalogPoints = points;
     hydrateLocalIcons(points, function () {
+      var visiblePoints = visibleCatalogPoints();
       var preferredIndex = refreshSelectionIndex;
       if (refreshSelectionKey) {
-        points.some(function (point, index) {
+        visiblePoints.some(function (point, index) {
           if (keyFor(point) !== refreshSelectionKey) return false;
           preferredIndex = index;
           return true;
         });
       }
       refreshSelectionKey = "";
-      render(points, preferredIndex);
+      updateManageHiddenAppsButton();
+      render(visiblePoints, preferredIndex);
     });
   }
 
@@ -450,7 +628,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.14";
+              point._localIcon = icons[key] + "?v=0.1.17";
             }
           });
         } catch (error) {
@@ -467,29 +645,23 @@
   function installClientPermissions(directError) {
     if (permissionBootstrapAttempted) {
       showStatus(
-        "App permissions were registered, but webOS has not activated them yet.\n" +
-        "Close PlainHome, reboot the TV, and open PlainHome again.\n" +
+        "webOS did not activate PlainHome access after refreshing it.\n" +
+        "Reboot the TV once, then open PlainHome again.\n" +
         directError
       );
       return;
     }
     permissionBootstrapAttempted = true;
-    showStatus("Completing one-time setup…");
+    showStatus("Refreshing PlainHome access…");
 
     var permissionFile =
       "{\"com.github.int21asm.plainhome-*\":[\"public\",\"applications.launch\",\"applications.internal\"]}";
     var command =
       "for d in /var/luna-service2-dev/client-permissions.d /var/luna-service2/client-permissions.d; do " +
-      "if [ -d \"$d\" ]; then printf '%s\\n' '" + permissionFile +
+      "if [ -d \"$d\" ] && [ ! -f \"$d/com.github.int21asm.plainhome.app.json\" ]; then " +
+      "printf '%s\\n' '" + permissionFile +
       "' > \"$d/com.github.int21asm.plainhome.app.json\"; fi; done; " +
-      "ls-control scan-services; " +
-      "(sleep 1; " +
-      "luna-send-pub -n 1 -f luna://com.webos.applicationManager/closeByAppId " +
-      "'{\"id\":\"com.github.int21asm.plainhome\"}'; " +
-      "sleep 1; " +
-      "luna-send-pub -n 1 -f luna://com.webos.applicationManager/launch " +
-      "'{\"id\":\"com.github.int21asm.plainhome\"}') " +
-      "</dev/null >/tmp/plainhome-restart.log 2>&1 &";
+      "ls-control scan-services";
 
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
@@ -499,7 +671,17 @@
           showStatus("Unable to register app permissions.\n" + String(response.error));
           return;
         }
-        showStatus("Setup complete. Restarting PlainHome…");
+        showStatus("Access refreshed. Loading apps…");
+        window.setTimeout(function () {
+          lunaCall(
+            "luna://com.webos.applicationManager/listLaunchPoints",
+            { subscribe: false },
+            renderResponse,
+            function (retryError) {
+              installClientPermissions(retryError);
+            }
+          );
+        }, 1200);
       },
       function (homebrewError) {
         showStatus(
@@ -562,7 +744,7 @@
     if (!moveMode) return;
     var selectedKey = launchPoints[selectedIndex] ? keyFor(launchPoints[selectedIndex]) : "";
     if (save) {
-      saveOrder(launchPoints);
+      saveVisibleOrder(launchPoints);
     } else if (moveSnapshot) {
       var buttonsByKey = {};
       launchPoints.forEach(function (point, index) {
@@ -675,7 +857,7 @@
     if (launchPoints[selectedIndex]) refreshSelectionKey = keyFor(launchPoints[selectedIndex]);
     refreshSelectionIndex = selectedIndex;
     if (moveMode) {
-      saveOrder(launchPoints);
+      saveVisibleOrder(launchPoints);
       moveMode = false;
       moveSnapshot = null;
     }
@@ -686,7 +868,11 @@
       { subscribe: false },
       renderResponse,
       function (message) {
-        installClientPermissions(message);
+        if (String(message).toLowerCase().indexOf("denied method call") !== -1) {
+          installClientPermissions(message);
+          return;
+        }
+        showStatus("Unable to load installed apps.\n" + message + "\nPress Red to retry.");
       }
     );
   }
@@ -696,11 +882,36 @@
     var code = event.keyCode;
     var next = selectedIndex;
 
+    if (hiddenAppsOpen) {
+      if (key === "ArrowUp" || code === 38) {
+        event.preventDefault();
+        selectHiddenApp(selectedHiddenAppIndex - 1, true);
+      } else if (key === "ArrowDown" || code === 40) {
+        event.preventDefault();
+        selectHiddenApp(selectedHiddenAppIndex + 1, true);
+      } else if (key === "Enter" || code === 13) {
+        event.preventDefault();
+        suppressEnterUp = true;
+        toggleHiddenApp(selectedHiddenAppIndex);
+      } else if (key === "Escape" || key === "Backspace" || code === 27 || code === 8 || code === 461) {
+        event.preventDefault();
+        closeHiddenApps();
+      }
+      return;
+    }
+
     if (settingsOpen) {
+      if (key === "ArrowUp" || code === 38) {
+        event.preventDefault();
+        selectSetting(selectedSettingsIndex - 1, true);
+      } else if (key === "ArrowDown" || code === 40) {
+        event.preventDefault();
+        selectSetting(selectedSettingsIndex + 1, true);
+      } else
       if (key === "Enter" || code === 13) {
         event.preventDefault();
         suppressEnterUp = true;
-        toggleTimeFormat();
+        activateSetting();
       } else if (key === "Escape" || key === "Backspace" || code === 27 || code === 8 || code === 461) {
         event.preventDefault();
         closeSettings();
@@ -816,7 +1027,8 @@
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) {
       updateClock();
-      if (settingsOpen) timeFormatButton.focus();
+      if (hiddenAppsOpen) selectHiddenApp(selectedHiddenAppIndex, true);
+      else if (settingsOpen) selectSetting(selectedSettingsIndex, true);
       else if (selectedArea === "header") selectHeader(selectedHeaderIndex, true);
       else if (buttons.length) select(selectedIndex, true);
     }
