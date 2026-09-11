@@ -1,0 +1,12 @@
+title: PlainHome
+iconUri: https://raw.githubusercontent.com/int21asm/plainhome-webos/main/app/icon512.png
+manifestUrl: https://github.com/int21asm/plainhome-webos/releases/latest/download/com.github.int21asm.plainhome.manifest.json
+category: system
+pool: main
+description: |
+  Minimal customizable home launcher for rooted webOS TVs.
+
+  PlainHome lists installed applications in a compact grid, preserves a custom
+  app order, shows connected inputs using their assigned names, and includes a
+  configurable clock. Root is required for application discovery, icon access,
+  input discovery, and guarded removal of removable applications.

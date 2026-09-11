@@ -1,0 +1,291 @@
+:root {
+  color-scheme: dark;
+  font-family: "LG Smart UI", "Helvetica Neue", Arial, sans-serif;
+  background: #000;
+  color: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+body {
+  cursor: default;
+}
+
+#scroll {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+#scroll::-webkit-scrollbar {
+  display: none;
+}
+
+#topbar {
+  width: 100%;
+  height: 92px;
+  flex: 0 0 92px;
+  padding: 16px 48px 10px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  border-bottom: 2px solid #202020;
+}
+
+#clock {
+  margin-right: auto;
+  color: #fff;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 44px;
+  font-variant-numeric: tabular-nums;
+}
+
+#top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#top-actions button {
+  min-width: 112px;
+  height: 62px;
+  padding: 5px 16px;
+  border: 3px solid transparent;
+  border-radius: 14px;
+  outline: none;
+  background: #151515;
+  color: #fff;
+  font-family: inherit;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 44px;
+}
+
+#top-actions button.selected,
+#top-actions button:focus {
+  border-color: #fff;
+  background: #303030;
+}
+
+#apps {
+  width: 100%;
+  min-height: calc(100% - 92px);
+  padding: 18px 48px 50px;
+  overflow-x: hidden;
+  overflow-y: visible;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: 266px;
+  gap: 22px;
+  align-content: start;
+  scrollbar-width: none;
+}
+
+.app {
+  position: relative;
+  min-width: 0;
+  padding: 8px 10px 7px;
+  border: 4px solid transparent;
+  border-radius: 20px;
+  outline: none;
+  background: #101010;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transform: scale(1);
+  transition: transform 100ms ease, border-color 100ms ease, background 100ms ease;
+}
+
+.app:focus,
+.app.selected {
+  z-index: 1;
+  border-color: #fff;
+  background: #242424;
+  transform: scale(1.04);
+}
+
+.app.moving {
+  border-color: #ffd400;
+  background: #302900;
+  transform: scale(1.07);
+}
+
+.art {
+  width: 190px;
+  height: 190px;
+  flex: 0 0 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 22px;
+  background: #1d1d1d;
+}
+
+.art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.initial {
+  font-size: 92px;
+  font-weight: 700;
+  line-height: 1;
+  color: #dedede;
+}
+
+.label {
+  width: 100%;
+  min-height: 40px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 40px;
+}
+
+#status {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px;
+  color: #d7d7d7;
+  background: #000;
+  text-align: center;
+  font-size: 36px;
+  line-height: 1.35;
+}
+
+#status[hidden] {
+  display: none;
+}
+
+#notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 10;
+  max-width: 90%;
+  padding: 12px 24px;
+  border-radius: 12px;
+  transform: translateX(-50%);
+  background: rgba(30, 30, 30, 0.96);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+#notice[hidden],
+#confirm[hidden],
+#settings[hidden] {
+  display: none;
+}
+
+#confirm,
+#settings {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.dialog {
+  width: 760px;
+  padding: 48px 54px 40px;
+  border: 3px solid #fff;
+  border-radius: 22px;
+  background: #171717;
+  text-align: center;
+}
+
+.dialog h1 {
+  margin: 0 0 24px;
+  font-size: 44px;
+}
+
+.dialog p {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.35;
+}
+
+.dialog .dialog-help {
+  margin-top: 36px;
+  color: #cfcfcf;
+  font-size: 27px;
+}
+
+.settings-panel {
+  width: 780px;
+  padding: 46px 54px 38px;
+  border: 3px solid #fff;
+  border-radius: 22px;
+  background: #171717;
+}
+
+.settings-panel h1 {
+  margin: 0 0 34px;
+  font-size: 44px;
+  text-align: center;
+}
+
+#time-format {
+  width: 100%;
+  min-height: 70px;
+  padding: 10px 20px;
+  border: 3px solid #fff;
+  border-radius: 14px;
+  outline: none;
+  background: #303030;
+  color: #fff;
+  font-family: inherit;
+  font-size: 34px;
+  font-weight: 600;
+  text-align: left;
+}
+
+#time-format:focus {
+  background: #484848;
+}
+
+#app-version {
+  margin: 38px 0 0;
+  color: #aaa;
+  font-size: 28px;
+  text-align: center;
+}
+
+.settings-help {
+  margin: 22px 0 0;
+  color: #cfcfcf;
+  font-size: 27px;
+  text-align: center;
+}

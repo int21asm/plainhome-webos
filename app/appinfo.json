@@ -1,0 +1,23 @@
+{
+  "id": "com.github.int21asm.plainhome",
+  "version": "0.1.14",
+  "vendor": "Local",
+  "type": "web",
+  "main": "index.html",
+  "title": "PlainHome",
+  "icon": "icon80.png",
+  "largeIcon": "icon130.png",
+  "iconColor": "#000000",
+  "resolution": "1920x1080",
+  "noSplashOnLaunch": true,
+  "spinnerOnLaunch": false,
+  "disableBackHistoryAPI": true,
+  "supportQuickStart": true,
+  "visible": true,
+  "requiredPermissions": [
+    "public",
+    "applications.launch",
+    "applications.internal",
+    "org.webosbrew.hbchannel.service.group"
+  ]
+}
