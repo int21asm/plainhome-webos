@@ -12,6 +12,8 @@ A deliberately minimal launcher for LG webOS TVs:
 - D-pad, Enter, Back, Magic Remote pointer and wheel scrolling
 - no boot hook and no Home-button replacement
 
+![PlainHome showing installed applications and connected inputs](docs/screenshot.jpg)
+
 ## Requirements
 
 PlainHome currently requires a **rooted webOS TV with Homebrew Channel installed and its root service enabled**. Installing the IPK through LG Developer Mode on an unrooted TV is not sufficient: application discovery, icon access, connected-input detection, and app removal depend on rooted Homebrew services.
