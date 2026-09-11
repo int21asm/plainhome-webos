@@ -48,6 +48,7 @@ body {
 
 #date-time {
   margin-right: auto;
+  min-width: 0;
   display: flex;
   align-items: baseline;
   gap: 28px;
@@ -56,6 +57,7 @@ body {
 
 #clock,
 #date {
+  flex: 0 0 auto;
   color: #fff;
   font-size: 34px;
   font-weight: 600;
@@ -64,6 +66,22 @@ body {
 
 #clock {
   font-variant-numeric: tabular-nums;
+}
+
+#custom-text {
+  flex: 0 1 520px;
+  max-width: 520px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 44px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#custom-text[hidden] {
+  display: none;
 }
 
 #top-actions {
@@ -214,13 +232,15 @@ body {
 #notice[hidden],
 #confirm[hidden],
 #settings[hidden],
-#hidden-apps[hidden] {
+#hidden-apps[hidden],
+#custom-text-editor[hidden] {
   display: none;
 }
 
 #confirm,
 #settings,
-#hidden-apps {
+#hidden-apps,
+#custom-text-editor {
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -236,6 +256,10 @@ body {
 }
 
 #hidden-apps {
+  z-index: 30;
+}
+
+#custom-text-editor {
   z-index: 30;
 }
 
@@ -293,6 +317,9 @@ body {
   font-size: 34px;
   font-weight: 600;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-option:focus,
@@ -351,6 +378,58 @@ body {
 
 .hidden-app-option.is-hidden {
   color: #aaa;
+}
+
+.custom-text-panel {
+  width: 900px;
+  padding: 44px 50px 34px;
+  border: 3px solid #fff;
+  border-radius: 22px;
+  background: #171717;
+}
+
+.custom-text-panel h1 {
+  margin: 0 0 30px;
+  font-size: 44px;
+  text-align: center;
+}
+
+#custom-text-input {
+  width: 100%;
+  height: 76px;
+  padding: 10px 18px;
+  border: 3px solid var(--focus-color);
+  border-radius: 14px;
+  outline: none;
+  background: #303030;
+  color: #fff;
+  font-family: inherit;
+  font-size: 34px;
+}
+
+.editor-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 16px;
+}
+
+.editor-actions button {
+  flex: 1;
+  height: 68px;
+  border: 3px solid transparent;
+  border-radius: 14px;
+  outline: none;
+  background: #292929;
+  color: #fff;
+  font-family: inherit;
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.editor-actions button:focus,
+.editor-actions button.selected {
+  border-color: var(--focus-color);
+  background: #484848;
 }
 
 #app-version {

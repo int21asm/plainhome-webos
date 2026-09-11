@@ -8,6 +8,7 @@
   var HIDDEN_APPS_KEY = "plainHomeHiddenAppsV1";
   var SORT_MODE_KEY = "plainHomeSortModeV1";
   var FOCUS_COLOR_KEY = "plainHomeFocusColorV1";
+  var CUSTOM_TEXT_KEY = "plainHomeCustomTextV1";
   var FOCUS_COLORS = [
     { id: "white", label: "White", value: "#ffffff" },
     { id: "blue", label: "Blue", value: "#38a7ff" },
@@ -25,15 +26,21 @@
   var confirmMessageElement = document.getElementById("confirm-message");
   var clockElement = document.getElementById("clock");
   var dateElement = document.getElementById("date");
+  var customTextElement = document.getElementById("custom-text");
   var topActionsElement = document.getElementById("top-actions");
   var settingsElement = document.getElementById("settings");
   var timeFormatButton = document.getElementById("time-format");
   var sortModeButton = document.getElementById("sort-mode");
   var resetOrderButton = document.getElementById("reset-order");
   var focusColorButton = document.getElementById("focus-color");
+  var editCustomTextButton = document.getElementById("edit-custom-text");
   var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
   var hiddenAppsElement = document.getElementById("hidden-apps");
   var hiddenAppListElement = document.getElementById("hidden-app-list");
+  var customTextEditorElement = document.getElementById("custom-text-editor");
+  var customTextInput = document.getElementById("custom-text-input");
+  var saveCustomTextButton = document.getElementById("save-custom-text");
+  var clearCustomTextButton = document.getElementById("clear-custom-text");
   var headerButtons = Array.prototype.slice.call(document.querySelectorAll("#top-actions button"));
   var settingsButtons = Array.prototype.slice.call(document.querySelectorAll(".settings-option"));
   var discoveredPoints = [];
@@ -58,10 +65,14 @@
   var hiddenAppsOpen = false;
   var hiddenAppButtons = [];
   var selectedHiddenAppIndex = 0;
+  var customTextEditorOpen = false;
+  var selectedTextEditorIndex = 0;
+  var textEditorControls = [customTextInput, saveCustomTextButton, clearCustomTextButton];
   var hiddenAppKeys = readHiddenAppKeys();
   var timeFormat = readTimeFormat();
   var sortMode = readSortMode();
   var focusColor = readFocusColor();
+  var customText = readCustomText();
 
   function showStatus(message) {
     statusElement.textContent = message;
@@ -162,6 +173,22 @@
     }
   }
 
+  function readCustomText() {
+    try {
+      return String(window.localStorage.getItem(CUSTOM_TEXT_KEY) || "").slice(0, 80);
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function saveCustomText() {
+    try {
+      window.localStorage.setItem(CUSTOM_TEXT_KEY, customText);
+    } catch (error) {
+      showNotice("The custom text changed, but webOS could not save it.");
+    }
+  }
+
   function applyFocusColor() {
     document.documentElement.style.setProperty("--focus-color", focusColorDetails().value);
   }
@@ -196,6 +223,12 @@
 
   function updateFocusColorButton() {
     focusColorButton.textContent = "Focus border: " + focusColorDetails().label;
+  }
+
+  function updateCustomText() {
+    customTextElement.textContent = customText;
+    customTextElement.hidden = customText.length === 0;
+    editCustomTextButton.textContent = customText ? "Custom text: " + customText : "Custom text: None";
   }
 
   function updateClock() {
@@ -282,6 +315,7 @@
     updateTimeFormatButton();
     updateSortModeButton();
     updateFocusColorButton();
+    updateCustomText();
     updateManageHiddenAppsButton();
     settingsElement.hidden = false;
     selectSetting(selectedSettingsIndex, true);
@@ -308,7 +342,42 @@
     else if (button === sortModeButton) toggleSortMode();
     else if (button === resetOrderButton) requestOrderReset();
     else if (button === focusColorButton) toggleFocusColor();
+    else if (button === editCustomTextButton) openCustomTextEditor();
     else if (button === manageHiddenAppsButton) openHiddenApps();
+  }
+
+  function selectTextEditorControl(index, focus) {
+    selectedTextEditorIndex = Math.max(0, Math.min(textEditorControls.length - 1, index));
+    textEditorControls.forEach(function (control, controlIndex) {
+      if (controlIndex === selectedTextEditorIndex) control.classList.add("selected");
+      else control.classList.remove("selected");
+    });
+    if (focus !== false) textEditorControls[selectedTextEditorIndex].focus();
+  }
+
+  function openCustomTextEditor() {
+    customTextEditorOpen = true;
+    customTextInput.value = customText;
+    customTextEditorElement.hidden = false;
+    selectedTextEditorIndex = 0;
+    window.setTimeout(function () {
+      selectTextEditorControl(0, true);
+      customTextInput.select();
+    }, 0);
+  }
+
+  function closeCustomTextEditor() {
+    customTextEditorOpen = false;
+    customTextEditorElement.hidden = true;
+    customTextInput.value = customText;
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function commitCustomText(value) {
+    customText = String(value || "").replace(/^\s+|\s+$/g, "").slice(0, 80);
+    saveCustomText();
+    updateCustomText();
+    closeCustomTextEditor();
   }
 
   function requestOrderReset() {
@@ -492,6 +561,7 @@
     updateTimeFormatButton();
     updateSortModeButton();
     updateFocusColorButton();
+    updateCustomText();
     updateManageHiddenAppsButton();
     updateClock();
     window.setInterval(updateClock, 15000);
@@ -504,6 +574,21 @@
       button.addEventListener("mouseover", function () {
         selectSetting(index, false);
       });
+    });
+    customTextInput.addEventListener("focus", function () {
+      selectTextEditorControl(0, false);
+    });
+    saveCustomTextButton.addEventListener("click", function () {
+      commitCustomText(customTextInput.value);
+    });
+    saveCustomTextButton.addEventListener("mouseover", function () {
+      selectTextEditorControl(1, false);
+    });
+    clearCustomTextButton.addEventListener("click", function () {
+      commitCustomText("");
+    });
+    clearCustomTextButton.addEventListener("mouseover", function () {
+      selectTextEditorControl(2, false);
     });
   }
 
@@ -825,7 +910,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.21";
+              point._localIcon = icons[key] + "?v=0.1.22";
             }
           });
         } catch (error) {
@@ -1085,6 +1170,34 @@
     var code = event.keyCode;
     var next = selectedIndex;
 
+    if (customTextEditorOpen) {
+      if (key === "ArrowUp" || code === 38) {
+        event.preventDefault();
+        selectTextEditorControl(0, true);
+      } else if (key === "ArrowDown" || code === 40) {
+        event.preventDefault();
+        selectTextEditorControl(selectedTextEditorIndex === 0 ? 1 : selectedTextEditorIndex, true);
+      } else if (key === "ArrowLeft" || code === 37) {
+        event.preventDefault();
+        if (selectedTextEditorIndex > 0) selectTextEditorControl(1, true);
+      } else if (key === "ArrowRight" || code === 39) {
+        event.preventDefault();
+        if (selectedTextEditorIndex > 0) selectTextEditorControl(2, true);
+      } else if (key === "Enter" || code === 13) {
+        event.preventDefault();
+        suppressEnterUp = true;
+        if (selectedTextEditorIndex === 2) commitCustomText("");
+        else commitCustomText(customTextInput.value);
+      } else if (code === 405 || key === "ColorF2Yellow") {
+        event.preventDefault();
+        commitCustomText("");
+      } else if (key === "Escape" || key === "Backspace" || code === 27 || code === 8 || code === 461) {
+        event.preventDefault();
+        closeCustomTextEditor();
+      }
+      return;
+    }
+
     if (pendingOrderReset) {
       if (key === "Enter" || code === 13) {
         event.preventDefault();
@@ -1242,7 +1355,8 @@
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) {
       updateClock();
-      if (hiddenAppsOpen) selectHiddenApp(selectedHiddenAppIndex, true);
+      if (customTextEditorOpen) selectTextEditorControl(selectedTextEditorIndex, true);
+      else if (hiddenAppsOpen) selectHiddenApp(selectedHiddenAppIndex, true);
       else if (settingsOpen) selectSetting(selectedSettingsIndex, true);
       else if (selectedArea === "header") selectHeader(selectedHeaderIndex, true);
       else if (buttons.length) select(selectedIndex, true);

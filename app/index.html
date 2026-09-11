@@ -12,6 +12,7 @@
         <div id="date-time">
           <time id="clock" aria-label="Current time">--:--</time>
           <time id="date" aria-label="Current date">--</time>
+          <span id="custom-text" hidden></span>
         </div>
         <nav id="top-actions" aria-label="Inputs and configuration">
           <button type="button" data-action="config" tabindex="-1">Config</button>
@@ -35,8 +36,9 @@
         <button id="sort-mode" class="settings-option" type="button" tabindex="-1"></button>
         <button id="reset-order" class="settings-option" type="button" tabindex="-1">Reset custom order</button>
         <button id="focus-color" class="settings-option" type="button" tabindex="-1"></button>
+        <button id="edit-custom-text" class="settings-option" type="button" tabindex="-1"></button>
         <button id="manage-hidden-apps" class="settings-option" type="button" tabindex="-1"></button>
-        <p id="app-version">PlainHome 0.1.21</p>
+        <p id="app-version">PlainHome 0.1.22</p>
         <p class="settings-help">Up/Down: select&nbsp;&nbsp;&nbsp; OK: open/change&nbsp;&nbsp;&nbsp; Back: close</p>
       </section>
     </div>
@@ -45,6 +47,17 @@
         <h1 id="hidden-apps-title">Show or hide apps</h1>
         <div id="hidden-app-list"></div>
         <p class="settings-help">OK: show/hide&nbsp;&nbsp;&nbsp; Back: settings</p>
+      </section>
+    </div>
+    <div id="custom-text-editor" hidden>
+      <section class="custom-text-panel" role="dialog" aria-modal="true" aria-labelledby="custom-text-title">
+        <h1 id="custom-text-title">Custom header text</h1>
+        <input id="custom-text-input" type="text" maxlength="80" placeholder="Enter text" autocomplete="off">
+        <div class="editor-actions">
+          <button id="save-custom-text" type="button" tabindex="-1">Save</button>
+          <button id="clear-custom-text" type="button" tabindex="-1">Clear</button>
+        </div>
+        <p class="settings-help">Enter/Done: save&nbsp;&nbsp;&nbsp; Yellow: clear&nbsp;&nbsp;&nbsp; Back: cancel</p>
       </section>
     </div>
     <script src="app.js"></script>

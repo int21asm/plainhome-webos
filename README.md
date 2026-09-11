@@ -6,9 +6,12 @@ A deliberately minimal launcher for LG webOS TVs:
 - dynamically lists launchable installed apps
 - large icons in a compact six-column grid
 - persistent custom app order with new apps appended automatically
+- Custom, LG-order, and alphabetical sorting, with a reset-to-LG-order action
+- persistent hide/unhide controls for installed apps
 - guarded removal of apps that webOS explicitly marks removable
-- scrollable top bar with a live clock, connected named HDMI inputs, and a Config menu
+- scrollable top bar with a live clock, localized date, custom text, connected named HDMI inputs, and a Config menu
 - persistent 24-hour or AM/PM clock setting
+- persistent focus-border color selection
 - D-pad, Enter, Back, Magic Remote pointer and wheel scrolling
 - no boot hook and no Home-button replacement
 
@@ -59,6 +62,8 @@ Because webOS blocks one app from reading another app's icon, the Homebrew helpe
 - Yellow button: remove the selected app when webOS marks it removable (confirmation required)
 - Back: close PlainHome
 - Magic Remote pointer: point and click
+
+The Config menu provides time format, sort mode, custom-order reset, focus-border color, custom header text, and hide/unhide controls. Custom header text is empty by default.
 
 ## Development disclosure
 

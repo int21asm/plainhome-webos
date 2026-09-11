@@ -7,6 +7,8 @@ description: |
   Minimal customizable home launcher for rooted webOS TVs.
 
   PlainHome lists installed applications in a compact grid, preserves a custom
-  app order, shows connected inputs using their assigned names, and includes a
-  configurable clock. Root is required for application discovery, icon access,
-  input discovery, and guarded removal of removable applications.
+  app order, supports hiding apps and multiple sort modes, shows connected
+  inputs using their assigned names, and includes a configurable clock, date,
+  custom header text, and focus color. Root is required for application
+  discovery, icon access, input discovery, and guarded removal of removable
+  applications.
