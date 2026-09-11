@@ -12,12 +12,14 @@
   var statusElement = document.getElementById("status");
   var noticeElement = document.getElementById("notice");
   var confirmElement = document.getElementById("confirm");
+  var confirmTitleElement = document.getElementById("confirm-title");
   var confirmMessageElement = document.getElementById("confirm-message");
   var clockElement = document.getElementById("clock");
   var topActionsElement = document.getElementById("top-actions");
   var settingsElement = document.getElementById("settings");
   var timeFormatButton = document.getElementById("time-format");
   var sortModeButton = document.getElementById("sort-mode");
+  var resetOrderButton = document.getElementById("reset-order");
   var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
   var hiddenAppsElement = document.getElementById("hidden-apps");
   var hiddenAppListElement = document.getElementById("hidden-app-list");
@@ -37,6 +39,7 @@
   var enterTimer = null;
   var suppressEnterUp = false;
   var pendingRemoval = null;
+  var pendingOrderReset = false;
   var refreshSelectionKey = "";
   var refreshSelectionIndex = 0;
   var settingsOpen = false;
@@ -233,7 +236,40 @@
     var button = settingsButtons[selectedSettingsIndex];
     if (button === timeFormatButton) toggleTimeFormat();
     else if (button === sortModeButton) toggleSortMode();
+    else if (button === resetOrderButton) requestOrderReset();
     else if (button === manageHiddenAppsButton) openHiddenApps();
+  }
+
+  function requestOrderReset() {
+    pendingOrderReset = true;
+    confirmTitleElement.textContent = "Reset custom order?";
+    confirmMessageElement.textContent = "Replace the saved Custom order with the TV's current LG order?";
+    confirmElement.hidden = false;
+  }
+
+  function cancelOrderReset() {
+    pendingOrderReset = false;
+    confirmElement.hidden = true;
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function confirmOrderReset() {
+    var selectedKey = launchPoints[selectedIndex] ? keyFor(launchPoints[selectedIndex]) : "";
+    var preferredIndex = 0;
+    if (!pendingOrderReset) return;
+    pendingOrderReset = false;
+    confirmElement.hidden = true;
+    saveOrder(discoveredPoints);
+    catalogPoints = sortCatalogPoints(discoveredPoints);
+    visibleCatalogPoints().some(function (point, index) {
+      if (keyFor(point) !== selectedKey) return false;
+      preferredIndex = index;
+      return true;
+    });
+    render(visibleCatalogPoints(), preferredIndex);
+    showNotice("Custom app order reset to LG order.");
+    window.setTimeout(hideNotice, 2400);
+    selectSetting(selectedSettingsIndex, true);
   }
 
   function toggleSortMode() {
@@ -703,7 +739,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.18";
+              point._localIcon = icons[key] + "?v=0.1.19";
             }
           });
         } catch (error) {
@@ -875,6 +911,7 @@
       return;
     }
     pendingRemoval = point;
+    confirmTitleElement.textContent = "Remove app?";
     confirmMessageElement.textContent = "Uninstall " + titleFor(point) + " from the TV?";
     confirmElement.hidden = false;
   }
@@ -961,6 +998,18 @@
     var key = event.key;
     var code = event.keyCode;
     var next = selectedIndex;
+
+    if (pendingOrderReset) {
+      if (key === "Enter" || code === 13) {
+        event.preventDefault();
+        suppressEnterUp = true;
+        confirmOrderReset();
+      } else if (key === "Escape" || key === "Backspace" || code === 27 || code === 8 || code === 461) {
+        event.preventDefault();
+        cancelOrderReset();
+      }
+      return;
+    }
 
     if (hiddenAppsOpen) {
       if (key === "ArrowUp" || code === 38) {

@@ -219,6 +219,10 @@ body {
   background: rgba(0, 0, 0, 0.82);
 }
 
+#confirm {
+  z-index: 35;
+}
+
 #hidden-apps {
   z-index: 30;
 }
