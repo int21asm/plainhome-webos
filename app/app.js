@@ -6,6 +6,7 @@
   var ORDER_KEY = "plainHomeOrderV1";
   var TIME_FORMAT_KEY = "plainHomeTimeFormatV1";
   var HIDDEN_APPS_KEY = "plainHomeHiddenAppsV1";
+  var SORT_MODE_KEY = "plainHomeSortModeV1";
   var LONG_PRESS_MS = 700;
   var appsElement = document.getElementById("apps");
   var statusElement = document.getElementById("status");
@@ -16,11 +17,13 @@
   var topActionsElement = document.getElementById("top-actions");
   var settingsElement = document.getElementById("settings");
   var timeFormatButton = document.getElementById("time-format");
+  var sortModeButton = document.getElementById("sort-mode");
   var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
   var hiddenAppsElement = document.getElementById("hidden-apps");
   var hiddenAppListElement = document.getElementById("hidden-app-list");
   var headerButtons = Array.prototype.slice.call(document.querySelectorAll("#top-actions button"));
   var settingsButtons = Array.prototype.slice.call(document.querySelectorAll(".settings-option"));
+  var discoveredPoints = [];
   var catalogPoints = [];
   var launchPoints = [];
   var buttons = [];
@@ -43,6 +46,7 @@
   var selectedHiddenAppIndex = 0;
   var hiddenAppKeys = readHiddenAppKeys();
   var timeFormat = readTimeFormat();
+  var sortMode = readSortMode();
 
   function showStatus(message) {
     statusElement.textContent = message;
@@ -95,6 +99,24 @@
     }
   }
 
+  function readSortMode() {
+    var value;
+    try {
+      value = String(window.localStorage.getItem(SORT_MODE_KEY) || "custom");
+      return value === "lg" || value === "alphabetical" ? value : "custom";
+    } catch (error) {
+      return "custom";
+    }
+  }
+
+  function saveSortMode() {
+    try {
+      window.localStorage.setItem(SORT_MODE_KEY, sortMode);
+    } catch (error) {
+      showNotice("The sort mode changed, but webOS could not save it.");
+    }
+  }
+
   function isHidden(point) {
     return hiddenAppKeys.indexOf(keyFor(point)) !== -1;
   }
@@ -111,6 +133,16 @@
 
   function updateManageHiddenAppsButton() {
     manageHiddenAppsButton.textContent = "Show/hide apps: " + hiddenAppKeys.length + " hidden";
+  }
+
+  function sortModeTitle() {
+    if (sortMode === "lg") return "LG order";
+    if (sortMode === "alphabetical") return "Alphabetical";
+    return "Custom";
+  }
+
+  function updateSortModeButton() {
+    sortModeButton.textContent = "Sort mode: " + sortModeTitle();
   }
 
   function updateClock() {
@@ -176,6 +208,7 @@
   function openSettings() {
     settingsOpen = true;
     updateTimeFormatButton();
+    updateSortModeButton();
     updateManageHiddenAppsButton();
     settingsElement.hidden = false;
     selectSetting(selectedSettingsIndex, true);
@@ -199,7 +232,26 @@
   function activateSetting() {
     var button = settingsButtons[selectedSettingsIndex];
     if (button === timeFormatButton) toggleTimeFormat();
+    else if (button === sortModeButton) toggleSortMode();
     else if (button === manageHiddenAppsButton) openHiddenApps();
+  }
+
+  function toggleSortMode() {
+    var selectedKey = launchPoints[selectedIndex] ? keyFor(launchPoints[selectedIndex]) : "";
+    var preferredIndex = 0;
+    if (sortMode === "custom") sortMode = "lg";
+    else if (sortMode === "lg") sortMode = "alphabetical";
+    else sortMode = "custom";
+    saveSortMode();
+    updateSortModeButton();
+    catalogPoints = sortCatalogPoints(discoveredPoints);
+    visibleCatalogPoints().some(function (point, index) {
+      if (keyFor(point) !== selectedKey) return false;
+      preferredIndex = index;
+      return true;
+    });
+    render(visibleCatalogPoints(), preferredIndex);
+    selectSetting(selectedSettingsIndex, true);
   }
 
   function updateHiddenAppButton(button, point) {
@@ -317,6 +369,7 @@
 
   function setupHeader() {
     updateTimeFormatButton();
+    updateSortModeButton();
     updateManageHiddenAppsButton();
     updateClock();
     window.setInterval(updateClock, 15000);
@@ -474,6 +527,27 @@
     return result;
   }
 
+  function sortCatalogPoints(points) {
+    var result = points.slice();
+    if (sortMode === "custom") return reconcileOrder(result);
+    if (sortMode === "alphabetical") {
+      result.sort(function (left, right) {
+        var leftTitle = titleFor(left).toLocaleLowerCase();
+        var rightTitle = titleFor(right).toLocaleLowerCase();
+        var leftKey;
+        var rightKey;
+        if (leftTitle < rightTitle) return -1;
+        if (leftTitle > rightTitle) return 1;
+        leftKey = keyFor(left);
+        rightKey = keyFor(right);
+        if (leftKey < rightKey) return -1;
+        if (leftKey > rightKey) return 1;
+        return 0;
+      });
+    }
+    return result;
+  }
+
   function iconFor(point) {
     var candidates = [point._localIcon, point.extraLargeIcon, point.largeIcon, point.mediumLargeIcon, point.icon];
     for (var index = 0; index < candidates.length; index += 1) {
@@ -570,7 +644,8 @@
       seen[key] = true;
       return true;
     });
-    points = reconcileOrder(points);
+    discoveredPoints = points.slice();
+    points = sortCatalogPoints(discoveredPoints);
     points.forEach(function (point) {
       availableKeys[keyFor(point)] = true;
     });
@@ -628,7 +703,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.17";
+              point._localIcon = icons[key] + "?v=0.1.18";
             }
           });
         } catch (error) {
@@ -733,6 +808,11 @@
 
   function enterMoveMode() {
     if (!launchPoints.length || moveMode || pendingRemoval) return;
+    if (sortMode !== "custom") {
+      showNotice("Switch Sort mode to Custom before moving apps.");
+      window.setTimeout(hideNotice, 2600);
+      return;
+    }
     moveMode = true;
     moveSnapshot = launchPoints.slice();
     suppressEnterUp = true;
