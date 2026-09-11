@@ -7,6 +7,15 @@
   var TIME_FORMAT_KEY = "plainHomeTimeFormatV1";
   var HIDDEN_APPS_KEY = "plainHomeHiddenAppsV1";
   var SORT_MODE_KEY = "plainHomeSortModeV1";
+  var FOCUS_COLOR_KEY = "plainHomeFocusColorV1";
+  var FOCUS_COLORS = [
+    { id: "white", label: "White", value: "#ffffff" },
+    { id: "blue", label: "Blue", value: "#38a7ff" },
+    { id: "green", label: "Green", value: "#36e06f" },
+    { id: "yellow", label: "Yellow", value: "#ffd400" },
+    { id: "red", label: "Red", value: "#ff5252" },
+    { id: "pink", label: "Pink", value: "#ff62c7" }
+  ];
   var LONG_PRESS_MS = 700;
   var appsElement = document.getElementById("apps");
   var statusElement = document.getElementById("status");
@@ -20,6 +29,7 @@
   var timeFormatButton = document.getElementById("time-format");
   var sortModeButton = document.getElementById("sort-mode");
   var resetOrderButton = document.getElementById("reset-order");
+  var focusColorButton = document.getElementById("focus-color");
   var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
   var hiddenAppsElement = document.getElementById("hidden-apps");
   var hiddenAppListElement = document.getElementById("hidden-app-list");
@@ -50,6 +60,7 @@
   var hiddenAppKeys = readHiddenAppKeys();
   var timeFormat = readTimeFormat();
   var sortMode = readSortMode();
+  var focusColor = readFocusColor();
 
   function showStatus(message) {
     statusElement.textContent = message;
@@ -120,6 +131,40 @@
     }
   }
 
+  function readFocusColor() {
+    var value;
+    var index;
+    try {
+      value = String(window.localStorage.getItem(FOCUS_COLOR_KEY) || "white");
+    } catch (error) {
+      return "white";
+    }
+    for (index = 0; index < FOCUS_COLORS.length; index += 1) {
+      if (FOCUS_COLORS[index].id === value) return value;
+    }
+    return "white";
+  }
+
+  function focusColorDetails() {
+    var index;
+    for (index = 0; index < FOCUS_COLORS.length; index += 1) {
+      if (FOCUS_COLORS[index].id === focusColor) return FOCUS_COLORS[index];
+    }
+    return FOCUS_COLORS[0];
+  }
+
+  function saveFocusColor() {
+    try {
+      window.localStorage.setItem(FOCUS_COLOR_KEY, focusColor);
+    } catch (error) {
+      showNotice("The focus color changed, but webOS could not save it.");
+    }
+  }
+
+  function applyFocusColor() {
+    document.documentElement.style.setProperty("--focus-color", focusColorDetails().value);
+  }
+
   function isHidden(point) {
     return hiddenAppKeys.indexOf(keyFor(point)) !== -1;
   }
@@ -146,6 +191,10 @@
 
   function updateSortModeButton() {
     sortModeButton.textContent = "Sort mode: " + sortModeTitle();
+  }
+
+  function updateFocusColorButton() {
+    focusColorButton.textContent = "Focus border: " + focusColorDetails().label;
   }
 
   function updateClock() {
@@ -212,6 +261,7 @@
     settingsOpen = true;
     updateTimeFormatButton();
     updateSortModeButton();
+    updateFocusColorButton();
     updateManageHiddenAppsButton();
     settingsElement.hidden = false;
     selectSetting(selectedSettingsIndex, true);
@@ -237,6 +287,7 @@
     if (button === timeFormatButton) toggleTimeFormat();
     else if (button === sortModeButton) toggleSortMode();
     else if (button === resetOrderButton) requestOrderReset();
+    else if (button === focusColorButton) toggleFocusColor();
     else if (button === manageHiddenAppsButton) openHiddenApps();
   }
 
@@ -287,6 +338,19 @@
       return true;
     });
     render(visibleCatalogPoints(), preferredIndex);
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function toggleFocusColor() {
+    var currentIndex = 0;
+    var index;
+    for (index = 0; index < FOCUS_COLORS.length; index += 1) {
+      if (FOCUS_COLORS[index].id === focusColor) currentIndex = index;
+    }
+    focusColor = FOCUS_COLORS[(currentIndex + 1) % FOCUS_COLORS.length].id;
+    saveFocusColor();
+    applyFocusColor();
+    updateFocusColorButton();
     selectSetting(selectedSettingsIndex, true);
   }
 
@@ -404,8 +468,10 @@
   }
 
   function setupHeader() {
+    applyFocusColor();
     updateTimeFormatButton();
     updateSortModeButton();
+    updateFocusColorButton();
     updateManageHiddenAppsButton();
     updateClock();
     window.setInterval(updateClock, 15000);
@@ -739,7 +805,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.19";
+              point._localIcon = icons[key] + "?v=0.1.20";
             }
           });
         } catch (error) {

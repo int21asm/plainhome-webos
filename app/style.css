@@ -1,4 +1,5 @@
 :root {
+  --focus-color: #fff;
   color-scheme: dark;
   font-family: "LG Smart UI", "Helvetica Neue", Arial, sans-serif;
   background: #000;
@@ -77,7 +78,7 @@ body {
 
 #top-actions button.selected,
 #top-actions button:focus {
-  border-color: #fff;
+  border-color: var(--focus-color);
   background: #303030;
 }
 
@@ -116,7 +117,7 @@ body {
 .app:focus,
 .app.selected {
   z-index: 1;
-  border-color: #fff;
+  border-color: var(--focus-color);
   background: #242424;
   transform: scale(1.04);
 }
@@ -272,7 +273,7 @@ body {
   min-height: 70px;
   margin-bottom: 14px;
   padding: 10px 20px;
-  border: 3px solid #fff;
+  border: 3px solid transparent;
   border-radius: 14px;
   outline: none;
   background: #303030;
@@ -285,6 +286,7 @@ body {
 
 .settings-option:focus,
 .settings-option.selected {
+  border-color: var(--focus-color);
   background: #484848;
 }
 
@@ -332,7 +334,7 @@ body {
 
 .hidden-app-option:focus,
 .hidden-app-option.selected {
-  border-color: #fff;
+  border-color: var(--focus-color);
   background: #484848;
 }
 
