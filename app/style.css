@@ -46,12 +46,23 @@ body {
   border-bottom: 2px solid #202020;
 }
 
-#clock {
+#date-time {
   margin-right: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+  white-space: nowrap;
+}
+
+#clock,
+#date {
   color: #fff;
   font-size: 34px;
   font-weight: 600;
   line-height: 44px;
+}
+
+#clock {
   font-variant-numeric: tabular-nums;
 }
 

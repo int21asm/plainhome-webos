@@ -24,6 +24,7 @@
   var confirmTitleElement = document.getElementById("confirm-title");
   var confirmMessageElement = document.getElementById("confirm-message");
   var clockElement = document.getElementById("clock");
+  var dateElement = document.getElementById("date");
   var topActionsElement = document.getElementById("top-actions");
   var settingsElement = document.getElementById("settings");
   var timeFormatButton = document.getElementById("time-format");
@@ -199,6 +200,9 @@
 
   function updateClock() {
     var now = new Date();
+    var monthName;
+    var dateMonth;
+    var dateDay;
     try {
       clockElement.textContent = now.toLocaleTimeString([], {
         hour: "2-digit",
@@ -218,6 +222,22 @@
         (minutes.length < 2 ? "0" : "") + minutes + suffix;
     }
     clockElement.setAttribute("datetime", now.toISOString());
+    try {
+      monthName = now.toLocaleDateString([], { month: "long" });
+    } catch (error) {
+      monthName = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ][now.getMonth()];
+    }
+    dateElement.textContent = now.getDate() + " " + monthName + " " + now.getFullYear();
+    dateMonth = String(now.getMonth() + 1);
+    dateDay = String(now.getDate());
+    dateElement.setAttribute(
+      "datetime",
+      now.getFullYear() + "-" + (dateMonth.length < 2 ? "0" : "") + dateMonth +
+        "-" + (dateDay.length < 2 ? "0" : "") + dateDay
+    );
   }
 
   function clearHeaderSelection() {
@@ -805,7 +825,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.20";
+              point._localIcon = icons[key] + "?v=0.1.21";
             }
           });
         } catch (error) {
