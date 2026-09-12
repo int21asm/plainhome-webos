@@ -13,6 +13,8 @@
   var CUSTOM_TEXT_KEY = "plainHomeCustomTextV1";
   var STARTUP_HOOK = "/var/lib/webosbrew/init.d/60-plainhome";
   var STARTUP_CONFIG = "/var/lib/webosbrew/plainhome.conf";
+  var SHORTCUT_CAPTURE_REQUEST = "/tmp/plainhome-shortcut-capture.request";
+  var SHORTCUT_CAPTURE_RESULT = "/tmp/plainhome-shortcut-capture.result";
   var FOCUS_COLORS = [
     { id: "white", label: "White", value: "#ffffff" },
     { id: "blue", label: "Blue", value: "#38a7ff" },
@@ -49,6 +51,7 @@
   var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
   var startupButton = document.getElementById("startup");
   var homeButtonSetting = document.getElementById("home-button");
+  var remoteShortcutButton = document.getElementById("remote-shortcut");
   var hiddenAppsElement = document.getElementById("hidden-apps");
   var hiddenAppListElement = document.getElementById("hidden-app-list");
   var customTextEditorElement = document.getElementById("custom-text-editor");
@@ -93,6 +96,10 @@
   var startupBusy = false;
   var homeButtonEnabled = false;
   var homeButtonBusy = false;
+  var remoteShortcutCode = 0;
+  var remoteShortcutBusy = false;
+  var remoteShortcutCaptureActive = false;
+  var remoteShortcutPollCount = 0;
 
   function showStatus(message) {
     statusElement.textContent = message;
@@ -336,6 +343,14 @@
       "Home button opens PlainHome: " + (homeButtonEnabled ? "On" : "Off");
   }
 
+  function updateRemoteShortcutButton(checking) {
+    if (checking) remoteShortcutButton.textContent = "Remote shortcut: Checking…";
+    else if (remoteShortcutCaptureActive) remoteShortcutButton.textContent = "Remote shortcut: Press a button…";
+    else if (remoteShortcutCode > 0) {
+      remoteShortcutButton.textContent = "Remote shortcut: Button code " + remoteShortcutCode;
+    } else remoteShortcutButton.textContent = "Remote shortcut: Not set";
+  }
+
   function serviceDirectoryCommand() {
     return "SVCDIR=''; for d in " +
       "/media/developer/apps/usr/palm/services/com.github.int21asm.plainhome.service " +
@@ -348,6 +363,12 @@
       "if [ -f \"$PID_FILE\" ]; then PID=$(cat \"$PID_FILE\"); " +
       "case \"$PID\" in ''|*[!0-9]*) ;; *) kill \"$PID\" 2>/dev/null || true ;; esac; " +
       "rm -f \"$PID_FILE\"; fi; done; ";
+  }
+
+  function readShortcutConfigCommand() {
+    return "SHORTCUT_VALUE=$(sed -n 's/^shortcut=\\([0-9][0-9]*\\)$/\\1/p' " +
+      STARTUP_CONFIG + " 2>/dev/null | head -n 1); " +
+      "case \"$SHORTCUT_VALUE\" in ''|*[!0-9]*) SHORTCUT_VALUE=0 ;; esac; ";
   }
 
   function refreshStartupState() {
@@ -390,6 +411,26 @@
     );
   }
 
+  function refreshRemoteShortcutState() {
+    updateRemoteShortcutButton(true);
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      {
+        command: "sed -n 's/^shortcut=\\([0-9][0-9]*\\)$/\\1/p' " + STARTUP_CONFIG +
+          " 2>/dev/null | head -n 1"
+      },
+      function (response) {
+        var code = Number(String(response.stdoutString || "").replace(/\s+/g, ""));
+        remoteShortcutCode = isFinite(code) && code > 0 ? code : 0;
+        updateRemoteShortcutButton(false);
+      },
+      function () {
+        remoteShortcutCode = 0;
+        updateRemoteShortcutButton(false);
+      }
+    );
+  }
+
   function toggleStartup() {
     var enabling;
     var command;
@@ -402,16 +443,18 @@
         serviceDirectoryCommand() +
         "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
         "HOME_VALUE=0; grep -q '^home=1$' " + STARTUP_CONFIG + " 2>/dev/null && HOME_VALUE=1; " +
+        readShortcutConfigCommand() +
         "mkdir -p /var/lib/webosbrew/init.d; " +
-        "printf 'boot=1\\nhome=%s\\n' \"$HOME_VALUE\" > " + STARTUP_CONFIG + "; " +
+        "printf 'boot=1\\nhome=%s\\nshortcut=%s\\n' \"$HOME_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
         "\"$SVCDIR/autostart.sh\"; printf enabled";
     } else {
       command =
         serviceDirectoryCommand() + stopWatcherCommand() +
         "HOME_VALUE=0; grep -q '^home=1$' " + STARTUP_CONFIG + " 2>/dev/null && HOME_VALUE=1; " +
-        "if [ \"$HOME_VALUE\" = 1 ] && [ -n \"$SVCDIR\" ]; then " +
-        "printf 'boot=0\\nhome=1\\n' > " + STARTUP_CONFIG + "; " +
+        readShortcutConfigCommand() +
+        "if { [ \"$HOME_VALUE\" = 1 ] || [ \"$SHORTCUT_VALUE\" -gt 0 ]; } && [ -n \"$SVCDIR\" ]; then " +
+        "printf 'boot=0\\nhome=%s\\nshortcut=%s\\n' \"$HOME_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
         "else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
     }
@@ -454,15 +497,17 @@
       command = serviceDirectoryCommand() +
         "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
         "BOOT_VALUE=0; grep -q '^boot=1$' " + STARTUP_CONFIG + " 2>/dev/null && BOOT_VALUE=1; " +
+        readShortcutConfigCommand() +
         "mkdir -p /var/lib/webosbrew/init.d; " +
-        "printf 'boot=%s\\nhome=1\\n' \"$BOOT_VALUE\" > " + STARTUP_CONFIG + "; " +
+        "printf 'boot=%s\\nhome=1\\nshortcut=%s\\n' \"$BOOT_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
         "\"$SVCDIR/autostart.sh\"; printf enabled";
     } else {
       command = serviceDirectoryCommand() + stopWatcherCommand() +
         "BOOT_VALUE=0; grep -q '^boot=1$' " + STARTUP_CONFIG + " 2>/dev/null && BOOT_VALUE=1; " +
-        "if [ \"$BOOT_VALUE\" = 1 ] && [ -n \"$SVCDIR\" ]; then " +
-        "printf 'boot=1\\nhome=0\\n' > " + STARTUP_CONFIG + "; " +
+        readShortcutConfigCommand() +
+        "if { [ \"$BOOT_VALUE\" = 1 ] || [ \"$SHORTCUT_VALUE\" -gt 0 ]; } && [ -n \"$SVCDIR\" ]; then " +
+        "printf 'boot=%s\\nhome=0\\nshortcut=%s\\n' \"$BOOT_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
         "else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
     }
@@ -490,6 +535,139 @@
         showNotice("Could not change Home button: " + message);
         window.setTimeout(hideNotice, 3400);
         selectSetting(selectedSettingsIndex, true);
+      }
+    );
+  }
+
+  function finishRemoteShortcutCapture(code) {
+    remoteShortcutCaptureActive = false;
+    remoteShortcutBusy = false;
+    remoteShortcutCode = code;
+    updateRemoteShortcutButton(false);
+    hideNotice();
+    showNotice("Remote shortcut assigned to button code " + code + ".");
+    window.setTimeout(hideNotice, 3000);
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function stopRemoteShortcutCapture(message) {
+    remoteShortcutCaptureActive = false;
+    remoteShortcutBusy = false;
+    updateRemoteShortcutButton(false);
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      {
+        command: serviceDirectoryCommand() + stopWatcherCommand() +
+          "rm -f " + SHORTCUT_CAPTURE_REQUEST + " " + SHORTCUT_CAPTURE_RESULT + "; " +
+          "if [ -n \"$SVCDIR\" ]; then \"$SVCDIR/autostart.sh\"; fi"
+      },
+      function () {},
+      function () {}
+    );
+    showNotice(message);
+    window.setTimeout(hideNotice, 3200);
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function pollRemoteShortcutCapture() {
+    if (!remoteShortcutCaptureActive) return;
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      {
+        command: "if [ -f " + SHORTCUT_CAPTURE_RESULT + " ]; then cat " +
+          SHORTCUT_CAPTURE_RESULT + "; else printf waiting; fi"
+      },
+      function (response) {
+        var output = String(response.stdoutString || "").replace(/^\s+|\s+$/g, "");
+        var code;
+        if (!remoteShortcutCaptureActive) return;
+        if (/^[0-9]+$/.test(output)) {
+          code = Number(output);
+          if (code > 0) {
+            finishRemoteShortcutCapture(code);
+            return;
+          }
+        } else if (output.indexOf("error:") === 0) {
+          stopRemoteShortcutCapture("Could not save that remote button.");
+          return;
+        }
+        remoteShortcutPollCount += 1;
+        if (remoteShortcutPollCount >= 80) {
+          stopRemoteShortcutCapture("No remote button was detected. Try again.");
+          return;
+        }
+        window.setTimeout(pollRemoteShortcutCapture, 250);
+      },
+      function () {
+        remoteShortcutPollCount += 1;
+        if (remoteShortcutPollCount >= 80) {
+          stopRemoteShortcutCapture("Remote-button detection timed out.");
+          return;
+        }
+        window.setTimeout(pollRemoteShortcutCapture, 250);
+      }
+    );
+  }
+
+  function beginRemoteShortcutCapture() {
+    var command;
+    if (remoteShortcutBusy) return;
+    remoteShortcutBusy = true;
+    remoteShortcutCaptureActive = true;
+    remoteShortcutPollCount = 0;
+    updateRemoteShortcutButton(false);
+    showNotice("Press the spare remote button you want to use…");
+    command = serviceDirectoryCommand() + stopWatcherCommand() +
+      "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
+      "if [ ! -f " + STARTUP_CONFIG + " ]; then printf 'boot=0\\nhome=0\\n' > " + STARTUP_CONFIG + "; fi; " +
+      "rm -f " + SHORTCUT_CAPTURE_RESULT + "; : > " + SHORTCUT_CAPTURE_REQUEST + "; " +
+      "mkdir -p /var/lib/webosbrew/init.d; ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
+      "\"$SVCDIR/autostart.sh\"; printf capturing";
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      { command: command },
+      function (response) {
+        if (String(response.stdoutString || "").indexOf("capturing") === -1) {
+          stopRemoteShortcutCapture("Could not start remote-button detection.");
+          return;
+        }
+        window.setTimeout(pollRemoteShortcutCapture, 250);
+      },
+      function (message) {
+        stopRemoteShortcutCapture("Could not start detection: " + message);
+      }
+    );
+  }
+
+  function clearRemoteShortcut() {
+    var command;
+    if (remoteShortcutBusy || remoteShortcutCode <= 0) return;
+    remoteShortcutBusy = true;
+    remoteShortcutButton.textContent = "Remote shortcut: Clearing…";
+    command = serviceDirectoryCommand() + stopWatcherCommand() +
+      "rm -f " + SHORTCUT_CAPTURE_REQUEST + " " + SHORTCUT_CAPTURE_RESULT + "; " +
+      "sed -i '/^shortcut=/d' " + STARTUP_CONFIG + " 2>/dev/null || true; " +
+      "BOOT_VALUE=0; HOME_VALUE=0; " +
+      "grep -q '^boot=1$' " + STARTUP_CONFIG + " 2>/dev/null && BOOT_VALUE=1; " +
+      "grep -q '^home=1$' " + STARTUP_CONFIG + " 2>/dev/null && HOME_VALUE=1; " +
+      "if { [ \"$BOOT_VALUE\" = 1 ] || [ \"$HOME_VALUE\" = 1 ]; } && [ -n \"$SVCDIR\" ]; then " +
+      "\"$SVCDIR/autostart.sh\"; else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf cleared";
+    lunaCall(
+      "luna://org.webosbrew.hbchannel.service/exec",
+      { command: command },
+      function () {
+        remoteShortcutBusy = false;
+        remoteShortcutCode = 0;
+        updateRemoteShortcutButton(false);
+        showNotice("Remote shortcut cleared.");
+        window.setTimeout(hideNotice, 2400);
+        selectSetting(selectedSettingsIndex, true);
+      },
+      function (message) {
+        remoteShortcutBusy = false;
+        updateRemoteShortcutButton(false);
+        showNotice("Could not clear shortcut: " + message);
+        window.setTimeout(hideNotice, 3200);
       }
     );
   }
@@ -598,6 +776,7 @@
     updateManageHiddenAppsButton();
     refreshStartupState();
     refreshHomeButtonState();
+    refreshRemoteShortcutState();
     settingsElement.hidden = false;
     selectSetting(selectedSettingsIndex, true);
   }
@@ -629,6 +808,7 @@
     else if (button === manageHiddenAppsButton) openHiddenApps();
     else if (button === startupButton) toggleStartup();
     else if (button === homeButtonSetting) toggleHomeButton();
+    else if (button === remoteShortcutButton) beginRemoteShortcutCapture();
   }
 
   function selectTextEditorControl(index, focus) {
@@ -1237,7 +1417,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.34";
+              point._localIcon = icons[key] + "?v=0.1.38";
             }
           });
         } catch (error) {
@@ -1497,6 +1677,11 @@
     var code = event.keyCode;
     var next = selectedIndex;
 
+    if (remoteShortcutCaptureActive) {
+      event.preventDefault();
+      return;
+    }
+
     if (customTextEditorOpen) {
       if (key === "ArrowUp" || code === 38) {
         event.preventDefault();
@@ -1567,6 +1752,10 @@
         event.preventDefault();
         suppressEnterUp = true;
         activateSetting();
+      } else if ((code === 405 || key === "ColorF2Yellow") &&
+          settingsButtons[selectedSettingsIndex] === remoteShortcutButton) {
+        event.preventDefault();
+        clearRemoteShortcut();
       } else if (key === "Escape" || key === "Backspace" || code === 27 || code === 8 || code === 461) {
         event.preventDefault();
         closeSettings();

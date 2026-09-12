@@ -7,7 +7,7 @@ SERVICE_DIR="$PROJECT_DIR/service"
 DIST_DIR="$PROJECT_DIR/dist"
 PACKAGE_ID="com.github.int21asm.plainhome"
 SERVICE_ID="com.github.int21asm.plainhome.service"
-VERSION="0.1.34"
+VERSION="0.1.38"
 OUTPUT="$DIST_DIR/${PACKAGE_ID}_${VERSION}_all.ipk"
 
 for file in appinfo.json index.html style.css app.js icon-copy.js input-reader.js icon80.png icon130.png; do

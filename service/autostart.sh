@@ -1,12 +1,17 @@
 #!/bin/sh
 
 CONFIG=/var/lib/webosbrew/plainhome.conf
-[ -f "$CONFIG" ] || exit 0
+CAPTURE_REQUEST=/tmp/plainhome-shortcut-capture.request
 BOOT_ENABLED=0
 HOME_ENABLED=0
+SHORTCUT_CODE=0
 grep -q '^boot=1$' "$CONFIG" && BOOT_ENABLED=1
 grep -q '^home=1$' "$CONFIG" && HOME_ENABLED=1
-[ "$BOOT_ENABLED" = 1 ] || [ "$HOME_ENABLED" = 1 ] || exit 0
+SHORTCUT_CODE=$(sed -n 's/^shortcut=\([0-9][0-9]*\)$/\1/p' "$CONFIG" 2>/dev/null | head -n 1)
+case "$SHORTCUT_CODE" in
+  ''|0|*[!0-9]*) SHORTCUT_CODE=0 ;;
+esac
+[ "$BOOT_ENABLED" = 1 ] || [ "$HOME_ENABLED" = 1 ] || [ "$SHORTCUT_CODE" -gt 0 ] || [ -f "$CAPTURE_REQUEST" ] || exit 0
 
 PERMISSION_FILE=/var/luna-service2-dev/client-permissions.d/com.github.int21asm.plainhome.app.json
 PERMISSION_JSON='{"com.github.int21asm.plainhome-*":["public","applications.launch","applications.internal","com.github.int21asm.plainhome.service.group"]}'
@@ -36,6 +41,8 @@ for PID_FILE in /tmp/plainhome-service.pid /tmp/plainhome-power.pid; do
 done
 SERVICE_ARGS=
 [ "$BOOT_ENABLED" = 1 ] && SERVICE_ARGS="$SERVICE_ARGS --boot"
-[ "$HOME_ENABLED" = 1 ] && SERVICE_ARGS="$SERVICE_ARGS --watch"
+[ "$HOME_ENABLED" = 1 ] && SERVICE_ARGS="$SERVICE_ARGS --home"
+[ "$SHORTCUT_CODE" -gt 0 ] && SERVICE_ARGS="$SERVICE_ARGS --shortcut"
+[ -f "$CAPTURE_REQUEST" ] && SERVICE_ARGS="$SERVICE_ARGS --capture"
 nohup /usr/bin/node service.js $SERVICE_ARGS >/tmp/plainhome-service.stdout 2>&1 &
 exit 0

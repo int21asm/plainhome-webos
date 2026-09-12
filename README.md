@@ -12,7 +12,7 @@ A deliberately minimal launcher for LG webOS TVs:
 - scrollable top bar with a clock, date, custom text, connected named HDMI inputs, and a Config menu
 - independently configurable time and date formats, with an option to hide either one
 - persistent focus-border and tile-background color selection; tile backgrounds default to OLED black
-- optional launch at TV startup and optional Home-button takeover
+- optional launch at TV startup, Home-button takeover, and a learnable spare-button shortcut
 - D-pad, Enter, Back, Magic Remote pointer and wheel scrolling
 
 ![PlainHome showing installed applications and connected inputs](docs/screenshot.jpg)
@@ -53,7 +53,28 @@ The app first requests the catalog directly. On firmware that blocks the request
 
 Because webOS blocks one app from reading another app's icon, the Homebrew helper also runs the bundled `icon-copy.js`. That helper accepts only icon files contained in known webOS application roots, limits files to 2 MB, and copies them into PlainHome's own `icons/` directory. No system-owned file is changed.
 
-The startup and Home-button features are disabled until enabled in Config. Enabling either feature creates `/var/lib/webosbrew/plainhome.conf` and a symlink in `/var/lib/webosbrew/init.d/` to PlainHome's packaged startup script. Startup detection subscribes to the TV power state. Home-button takeover reads Linux input events without grabbing or blocking the input device, then asks webOS to launch PlainHome after a Home press. Disable both options to remove the hook and configuration file.
+The startup, Home-button, and remote-shortcut features are disabled until enabled in Config. Enabling any of them creates `/var/lib/webosbrew/plainhome.conf` and a `60-plainhome` symlink in `/var/lib/webosbrew/init.d/` to PlainHome's packaged startup script.
+
+### Startup and Home-button hook
+
+The startup option subscribes to webOS power-state changes; it does not poll continuously. At a full boot it launches PlainHome with bounded retries, stopping as soon as webOS confirms a successful launch. On a real suspend-to-active transition it launches PlainHome again. Screen-saver transitions are ignored so watching a video does not unexpectedly return to the launcher.
+
+The Home-button option starts a read-only Linux input watcher as root. It:
+
+- opens the available `/dev/input/event*` devices as non-blocking readers
+- checks for key-down events every 100 ms
+- recognizes the Home key code observed on the tested TV (`773`)
+- debounces repeated presses for 1.2 seconds
+- waits 350 ms, then asks webOS Application Manager to launch PlainHome
+- retries only when webOS does not confirm the launch
+
+The watcher does not grab the input device, suppress the key, patch `lginput2`, or inject code into an LG process. Consequently, LG's native Home action may appear briefly before PlainHome opens. The fixed Home key code can also differ on an untested TV or webOS release.
+
+Polling was deliberately reduced from 16 ms to 100 ms. On the tested `OLED77B36LA`, the settled watcher usage dropped from approximately 14.6% to 2.2% of one CPU core. This is an observed value rather than a guarantee for every model. The 100 ms interval adds at most roughly 100 ms of input-detection latency; the Home-button path then adds its intentional 350 ms delay.
+
+The learned remote shortcut uses the same watcher, so enabling both Home and a shortcut does not create a second polling loop. PlainHome asks the user to press the desired button, records the exact Linux key code emitted by that remote, and stores it in `/var/lib/webosbrew/plainhome.conf`. This avoids a model-specific button list. A shortcut launch uses a shorter 100 ms delay. Because events are only observed—not blocked—the button's normal LG action still occurs; a spare color button such as Blue is recommended. Select the shortcut setting and press Yellow to clear it.
+
+Disable every startup/input option to remove PlainHome's hook and configuration file.
 
 ## Controls
 
@@ -77,6 +98,7 @@ The Config menu provides:
 - app hide/unhide controls
 - optional launch at TV startup
 - optional Home-button takeover
+- learnable remote-button shortcut: press the desired spare button to assign it; press Yellow on this setting to clear it
 
 ## Development disclosure
 
