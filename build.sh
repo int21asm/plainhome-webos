@@ -7,7 +7,7 @@ SERVICE_DIR="$PROJECT_DIR/service"
 DIST_DIR="$PROJECT_DIR/dist"
 PACKAGE_ID="com.github.int21asm.plainhome"
 SERVICE_ID="com.github.int21asm.plainhome.service"
-VERSION="0.1.39"
+VERSION="0.1.40"
 OUTPUT="$DIST_DIR/${PACKAGE_ID}_${VERSION}_all.ipk"
 
 for file in appinfo.json index.html style.css app.js icon-copy.js input-reader.js icon80.png icon130.png; do
@@ -25,45 +25,19 @@ for file in service.js autostart.sh package.json services.json; do
 done
 
 mkdir -p "$DIST_DIR"
-BUILD_TMP=$(mktemp -d "${TMPDIR:-/tmp}/plainhome-build.XXXXXX")
-trap 'rm -rf "$BUILD_TMP"' EXIT HUP INT TERM
 
-mkdir -p "$BUILD_TMP/data/usr/palm/applications/$PACKAGE_ID"
-cp -R "$APP_DIR"/. "$BUILD_TMP/data/usr/palm/applications/$PACKAGE_ID/"
-mkdir -p "$BUILD_TMP/data/usr/palm/services/$SERVICE_ID"
-cp -R "$SERVICE_DIR"/. "$BUILD_TMP/data/usr/palm/services/$SERVICE_ID/"
-chmod 755 "$BUILD_TMP/data/usr/palm/services/$SERVICE_ID/autostart.sh"
-mkdir -p "$BUILD_TMP/data/usr/palm/packages/$PACKAGE_ID"
-printf '%s\n' \
-  '{' \
-  "  \"id\": \"$PACKAGE_ID\"," \
-  "  \"version\": \"$VERSION\"," \
-  "  \"app\": \"$PACKAGE_ID\"," \
-  '  "services": [' \
-  "    \"$SERVICE_ID\"" \
-  '  ]' \
-  '}' \
-  > "$BUILD_TMP/data/usr/palm/packages/$PACKAGE_ID/packageinfo.json"
-
-INSTALLED_SIZE=$(du -sk "$BUILD_TMP/data" | awk '{print $1}')
-printf '%s\n' \
-  "Package: $PACKAGE_ID" \
-  "Version: $VERSION" \
-  "Section: misc" \
-  "Priority: optional" \
-  "Architecture: all" \
-  "Maintainer: int21asm" \
-  "Installed-Size: $INSTALLED_SIZE" \
-  "Description: Minimal installed-app launcher for LG webOS" \
-  > "$BUILD_TMP/control"
-
-printf '2.0\n' > "$BUILD_TMP/debian-binary"
-
-COPYFILE_DISABLE=1 tar -C "$BUILD_TMP" -czf "$BUILD_TMP/control.tar.gz" control
-COPYFILE_DISABLE=1 tar -C "$BUILD_TMP/data" -czf "$BUILD_TMP/data.tar.gz" usr
+if ! command -v ares-package >/dev/null 2>&1; then
+  echo "ares-package is required. Install it with: npm install -g @webos-tools/cli" >&2
+  exit 1
+fi
 
 rm -f "$OUTPUT"
-(cd "$BUILD_TMP" && ar -rc "$OUTPUT" debian-binary control.tar.gz data.tar.gz)
+ares-package --no-minify "$APP_DIR" "$SERVICE_DIR" -o "$DIST_DIR"
+
+if [ ! -f "$OUTPUT" ]; then
+  echo "ares-package did not create the expected file: $OUTPUT" >&2
+  exit 1
+fi
 
 echo "Built: $OUTPUT"
 ar -t "$OUTPUT"

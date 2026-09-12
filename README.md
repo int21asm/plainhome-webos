@@ -35,13 +35,18 @@ Other rooted LG webOS models and releases may work, but have not yet been verifi
 
 ## Build
 
-Run:
+Install LG's official webOS CLI, then run:
+
+```sh
+npm install -g @webos-tools/cli
+```
 
 ```sh
 ./build.sh
 ```
 
-The IPK and Homebrew manifest are written to `dist/`.
+The build script uses `ares-package --no-minify`. The standard webOS IPK and
+Homebrew manifest are written to `dist/`.
 
 ## Install and test
 

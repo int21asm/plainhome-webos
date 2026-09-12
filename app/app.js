@@ -1417,7 +1417,7 @@
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
             if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.39";
+              point._localIcon = icons[key] + "?v=0.1.40";
             }
           });
         } catch (error) {
