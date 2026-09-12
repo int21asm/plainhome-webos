@@ -75,8 +75,6 @@ The Home-button option starts a read-only Linux input watcher as root. It:
 
 The watcher does not grab the input device, suppress the key, patch `lginput2`, or inject code into an LG process. Consequently, LG's native Home action may appear briefly before PlainHome opens. The fixed Home key code can also differ on an untested TV or webOS release.
 
-Polling was deliberately reduced from 16 ms to 100 ms. On the tested `OLED77B36LA`, the settled watcher usage dropped from approximately 14.6% to 2.2% of one CPU core. This is an observed value rather than a guarantee for every model. The 100 ms interval adds at most roughly 100 ms of input-detection latency; the Home-button path then adds its intentional 350 ms delay.
-
 The learned remote shortcut uses the same watcher, so enabling both Home and a shortcut does not create a second polling loop. PlainHome asks the user to press the desired button, records the exact Linux key code emitted by that remote, and stores it in `/var/lib/webosbrew/plainhome.conf`. This avoids a model-specific button list. A shortcut launch uses a shorter 100 ms delay. Because events are only observed—not blocked—the button's normal LG action still occurs; a spare color button such as Blue is recommended. Select the shortcut setting and press Yellow to clear it.
 
 Disable every startup/input option to remove PlainHome's hook and configuration file.
