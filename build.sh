@@ -7,7 +7,7 @@ SERVICE_DIR="$PROJECT_DIR/service"
 DIST_DIR="$PROJECT_DIR/dist"
 PACKAGE_ID="com.github.int21asm.plainhome"
 SERVICE_ID="com.github.int21asm.plainhome.service"
-VERSION="0.1.38"
+VERSION="0.1.39"
 OUTPUT="$DIST_DIR/${PACKAGE_ID}_${VERSION}_all.ipk"
 
 for file in appinfo.json index.html style.css app.js icon-copy.js input-reader.js icon80.png icon130.png; do
@@ -60,7 +60,7 @@ printf '%s\n' \
 printf '2.0\n' > "$BUILD_TMP/debian-binary"
 
 COPYFILE_DISABLE=1 tar -C "$BUILD_TMP" -czf "$BUILD_TMP/control.tar.gz" control
-COPYFILE_DISABLE=1 tar -C "$BUILD_TMP/data" -czf "$BUILD_TMP/data.tar.gz" .
+COPYFILE_DISABLE=1 tar -C "$BUILD_TMP/data" -czf "$BUILD_TMP/data.tar.gz" usr
 
 rm -f "$OUTPUT"
 (cd "$BUILD_TMP" && ar -rc "$OUTPUT" debian-binary control.tar.gz data.tar.gz)
