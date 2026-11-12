@@ -119,6 +119,28 @@ body {
   line-height: 44px;
 }
 
+#top-actions button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.header-icon {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  margin-right: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The gear is drawn on a 24-unit grid (the input icon on 36), so a thinner stroke matches it. */
+.gear-icon {
+  stroke-width: 2;
+}
+
 #top-actions button.selected,
 #top-actions button:focus {
   border-color: var(--focus-color);

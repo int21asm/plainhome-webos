@@ -1121,6 +1121,25 @@
     }
   }
 
+  /* Line icon in the style of LG's "Input" (external device) glyph. */
+  function createInputIcon() {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "header-icon");
+    svg.setAttribute("viewBox", "8 6 36 36");
+    svg.setAttribute("aria-hidden", "true");
+    [
+      "M32 13H21a7 7 0 0 0 0 14h11Z",
+      "M32 20H41M41 16.5V23.5",
+      "M11 22v3a10 10 0 0 0 10 10h11"
+    ].forEach(function (data) {
+      var path = document.createElementNS(ns, "path");
+      path.setAttribute("d", data);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
   function loadInputs() {
     var command =
       "for p in " +
@@ -1154,7 +1173,8 @@
           button.setAttribute("data-dynamic-input", "true");
           button.setAttribute("data-app-id", String(input.id || ""));
           button.setAttribute("data-title", String(input.title || "Input"));
-          button.textContent = String(input.title || "Input");
+          button.appendChild(createInputIcon());
+          button.appendChild(document.createTextNode(String(input.title || "Input")));
           topActionsElement.insertBefore(button, configButton);
         });
         wireHeaderButtons();
