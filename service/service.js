@@ -12,8 +12,15 @@ var CAPTURE_RESULT_FILE = "/tmp/plainhome-shortcut-capture.result";
 var HOME_KEY_CODE = 773;
 var INPUT_EVENT_SIZE = 16;
 var INPUT_POLL_MS = 100;
+var HOME_LAUNCH_DELAY_MS = 350;
+/* Surface-manager config read by KeyFilters/systemUi.js: when true, the Home key no longer
+   launches com.webos.app.home. Runtime-only (configd does not persist it), so a reboot or a
+   configd restart brings LG Home back by itself. */
+var DISABLE_HOME_CONFIG = "com.webos.surfacemanager.disableHome";
 var homeButtonEnabled = process.argv.indexOf("--home") !== -1 || process.argv.indexOf("--watch") !== -1;
 var shortcutCode = readShortcutCode();
+var lgHomeSuppressed = false;
+var watchedInputDevices = 0;
 
 try {
   fs.writeFileSync(PID_FILE, String(process.pid));
@@ -54,6 +61,39 @@ function saveShortcutCode(code) {
   if (!lines.some(function (line) { return line.indexOf("home=") === 0; })) lines.push("home=0");
   lines.push("shortcut=" + code);
   fs.writeFileSync(CONFIG_FILE, lines.join("\n") + "\n");
+}
+
+function setLgHomeDisabled(disabled) {
+  var configs = {};
+  var output;
+  configs[DISABLE_HOME_CONFIG] = disabled;
+  try {
+    output = String(childProcess.execFileSync(
+      "/usr/bin/luna-send",
+      ["-n", "1", "luna://com.webos.service.config/setConfigs", JSON.stringify({ configs: configs })],
+      { timeout: 5000 }
+    ));
+  } catch (error) {
+    log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + " failed: " + error.message);
+    return false;
+  }
+  log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + ": " + output.replace(/\s+/g, " ").slice(0, 200));
+  return /"returnValue"\s*:\s*true/.test(output);
+}
+
+function suppressLgHome() {
+  lgHomeSuppressed = setLgHomeDisabled(true);
+  if (!lgHomeSuppressed) return;
+  /* Give the Home key back to LG whenever this watcher stops, crashes or is killed. */
+  process.on("exit", function () {
+    if (lgHomeSuppressed) setLgHomeDisabled(false);
+  });
+  ["SIGTERM", "SIGINT", "SIGHUP"].forEach(function (signal) {
+    process.on(signal, function () {
+      log("received " + signal + ", exiting");
+      process.exit(0);
+    });
+  });
 }
 
 function launch(reason, attempt, callback) {
@@ -175,7 +215,7 @@ function watchRemoteButtons() {
     });
   } catch (error) {
     log("cannot read /dev/input: " + error.message);
-    return;
+    return 0;
   }
   names.forEach(function (name) {
     try {
@@ -188,6 +228,7 @@ function watchRemoteButtons() {
     }
   });
   log("Remote button watcher is reading " + descriptors.length + " input devices");
+  if (!descriptors.length) return 0;
   setInterval(function () {
     descriptors.forEach(function (descriptor) {
       var bytes;
@@ -225,9 +266,10 @@ function watchRemoteButtons() {
         if (homeButtonEnabled && keyCode === HOME_KEY_CODE && Date.now() - lastHomePress > 1200) {
           lastHomePress = Date.now();
           log("Home button pressed");
+          /* With LG Home suppressed there is nothing to wait for. */
           setTimeout(function () {
             launchWithRetry("home-key", 3, 500);
-          }, 350);
+          }, lgHomeSuppressed ? 0 : HOME_LAUNCH_DELAY_MS);
         } else if (
           shortcutCode > 0 &&
           keyCode === shortcutCode &&
@@ -243,6 +285,7 @@ function watchRemoteButtons() {
       }
     });
   }, INPUT_POLL_MS);
+  return descriptors.length;
 }
 
 log("startup/wake watcher started, pid=" + process.pid);
@@ -257,5 +300,9 @@ if (
   process.argv.indexOf("--shortcut") !== -1 ||
   process.argv.indexOf("--capture") !== -1
 ) {
-  watchRemoteButtons();
+  watchedInputDevices = watchRemoteButtons();
+}
+/* Only take the Home key away from LG when this watcher can actually see it. */
+if (homeButtonEnabled && watchedInputDevices > 0) {
+  suppressLgHome();
 }

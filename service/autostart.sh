@@ -11,6 +11,11 @@ SHORTCUT_CODE=$(sed -n 's/^shortcut=\([0-9][0-9]*\)$/\1/p' "$CONFIG" 2>/dev/null
 case "$SHORTCUT_CODE" in
   ''|0|*[!0-9]*) SHORTCUT_CODE=0 ;;
 esac
+# Home takeover off: make sure LG Home owns the Home key again (service.js disables it at runtime).
+if [ "$HOME_ENABLED" != 1 ]; then
+  luna-send -n 1 luna://com.webos.service.config/setConfigs \
+    '{"configs":{"com.webos.surfacemanager.disableHome":false}}' >/dev/null 2>&1 </dev/null || true
+fi
 [ "$BOOT_ENABLED" = 1 ] || [ "$HOME_ENABLED" = 1 ] || [ "$SHORTCUT_CODE" -gt 0 ] || [ -f "$CAPTURE_REQUEST" ] || exit 0
 
 PERMISSION_FILE=/var/luna-service2-dev/client-permissions.d/com.github.int21asm.plainhome.app.json
@@ -34,7 +39,16 @@ for PID_FILE in /tmp/plainhome-service.pid /tmp/plainhome-power.pid; do
     OLD_PID=$(cat "$PID_FILE")
     case "$OLD_PID" in
       ''|*[!0-9]*) ;;
-      *) kill "$OLD_PID" 2>/dev/null || true ;;
+      *)
+        kill "$OLD_PID" 2>/dev/null || true
+        # Wait up to 3 s, so the old watcher's exit handler (which re-enables LG Home)
+        # cannot run after the new watcher has disabled it.
+        WAITED=0
+        while kill -0 "$OLD_PID" 2>/dev/null && [ "$WAITED" -lt 30 ]; do
+          usleep 100000
+          WAITED=$((WAITED + 1))
+        done
+        ;;
     esac
     rm -f "$PID_FILE"
   fi
