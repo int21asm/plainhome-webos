@@ -56,7 +56,12 @@ function usableIcon(candidate) {
   } catch (error) {
     return null;
   }
-  return { path: canonical, extension: extension };
+  return {
+    path: canonical,
+    extension: extension,
+    size: stat.size,
+    signature: stat.size.toString(36) + "-" + Math.floor(stat.mtime.getTime() / 1000).toString(36)
+  };
 }
 
 function resolveCandidate(candidate, folderPath) {
@@ -118,7 +123,8 @@ function ensureDirectory(directory) {
   }
 }
 
-function clearGeneratedIcons(directory) {
+/* Removes generated icons that are not in `keep` (old index-named files included). */
+function clearGeneratedIcons(directory, keep) {
   var names;
   var index;
   try {
@@ -127,12 +133,21 @@ function clearGeneratedIcons(directory) {
     return;
   }
   for (index = 0; index < names.length; index += 1) {
-    if (!/^\d+-[A-Za-z0-9._-]+\.(png|jpe?g|webp|svg)$/i.test(names[index])) continue;
+    if (keep[names[index]] === true) continue;
+    if (!/^(\d+|k)-[A-Za-z0-9._-]+\.(png|jpe?g|webp|svg)$/i.test(names[index])) continue;
     try {
       fs.unlinkSync(path.join(directory, names[index]));
     } catch (error) {
       /* A stale icon is harmless if webOS still has it open. */
     }
+  }
+}
+
+function existingSize(file, size) {
+  try {
+    return fs.statSync(file).size === size;
+  } catch (error) {
+    return false;
   }
 }
 
@@ -145,6 +160,7 @@ function main() {
   var icon;
   var filename;
   var data;
+  var keep = {};
 
   try {
     var input = process.argv[2] || "";
@@ -158,7 +174,6 @@ function main() {
   if (!(requests instanceof Array)) requests = [];
   requests = requests.slice(0, ICON_LIMIT);
   ensureDirectory(outputDirectory);
-  clearGeneratedIcons(outputDirectory);
 
   for (index = 0; index < requests.length; index += 1) {
     request = requests[index] || {};
@@ -166,17 +181,23 @@ function main() {
     icon = findIcon(request);
     if (!icon) continue;
 
-    filename = String(index) + "-" + String(request.id || "app").replace(/[^A-Za-z0-9._-]/g, "_") + icon.extension;
+    /* Stable name: same app and unchanged source icon -> same file, so the app can cache the
+       path and later runs only copy what changed. */
+    filename = "k-" + request.key.replace(/[^A-Za-z0-9._-]/g, "_") + "-" + icon.signature + icon.extension;
     try {
-      data = fs.readFileSync(icon.path);
-      if (!data.length || data.length > MAX_ICON_BYTES) continue;
-      fs.writeFileSync(path.join(outputDirectory, filename), data, { mode: 420 });
+      if (!existingSize(path.join(outputDirectory, filename), icon.size)) {
+        data = fs.readFileSync(icon.path);
+        if (!data.length || data.length > MAX_ICON_BYTES) continue;
+        fs.writeFileSync(path.join(outputDirectory, filename), data, { mode: 420 });
+      }
       output[request.key] = "icons/" + filename;
+      keep[filename] = true;
     } catch (error) {
       /* The UI will retain its initial fallback. */
     }
   }
 
+  clearGeneratedIcons(outputDirectory, keep);
   process.stdout.write(JSON.stringify({ icons: output }));
 }
 
