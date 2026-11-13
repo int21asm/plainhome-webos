@@ -21,11 +21,55 @@ body {
   background: #000;
 }
 
+#focus-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #000;
+  pointer-events: none;
+}
+
+#focus-backdrop[hidden] {
+  display: none;
+}
+
+#focus-backdrop img {
+  position: absolute;
+  top: -12%;
+  left: -12%;
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  opacity: 0;
+  filter: blur(72px);
+}
+
+#focus-backdrop img.is-shown {
+  opacity: 1;
+}
+
+#focus-backdrop::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.72);
+}
+
 body {
   cursor: default;
 }
 
 #scroll {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   overflow-x: hidden;
@@ -297,7 +341,6 @@ body {
   z-index: 35;
 }
 
-/* Eleven options plus help text need more than 1080 - 2 * 80 px. */
 #settings {
   padding: 20px 80px;
 }
@@ -339,10 +382,16 @@ body {
 .settings-panel {
   width: 860px;
   max-height: 1040px;
+  overflow-y: auto;
+  scrollbar-width: none;
   padding: 32px 54px 26px;
   border: 3px solid #fff;
   border-radius: 22px;
   background: #171717;
+}
+
+.settings-panel::-webkit-scrollbar {
+  display: none;
 }
 
 .settings-panel h1 {
