@@ -11,6 +11,7 @@
   var SORT_MODE_KEY = "plainHomeSortModeV1";
   var FOCUS_COLOR_KEY = "plainHomeFocusColorV1";
   var BOX_COLOR_KEY = "plainHomeBoxColorV1";
+  var FOCUS_BACKGROUND_KEY = "plainHomeFocusBackgroundV1";
   var CUSTOM_TEXT_KEY = "plainHomeCustomTextV1";
   var ICON_CACHE_KEY = "plainHomeIconCacheV1";
   var STARTUP_HOOK = "/var/lib/webosbrew/init.d/60-plainhome";
@@ -49,6 +50,12 @@
   var resetOrderButton = document.getElementById("reset-order");
   var focusColorButton = document.getElementById("focus-color");
   var boxColorButton = document.getElementById("box-color");
+  var focusBackgroundButton = document.getElementById("focus-background");
+  var focusBackdropElement = document.getElementById("focus-backdrop");
+  var focusBackdropImages = [
+    document.getElementById("focus-backdrop-a"),
+    document.getElementById("focus-backdrop-b")
+  ];
   var editCustomTextButton = document.getElementById("edit-custom-text");
   var manageHiddenAppsButton = document.getElementById("manage-hidden-apps");
   var startupButton = document.getElementById("startup");
@@ -93,6 +100,9 @@
   var sortMode = readSortMode();
   var focusColor = readFocusColor();
   var boxColor = readBoxColor();
+  var focusBackgroundEnabled = readFocusBackground();
+  var focusBackdropFront = 0;
+  var focusBackdropToken = 0;
   var customText = readCustomText();
   var startupEnabled = false;
   var startupBusy = false;
@@ -326,6 +336,80 @@
 
   function updateBoxColorButton() {
     boxColorButton.textContent = "Tile background: " + boxColorDetails().label;
+  }
+
+  function readFocusBackground() {
+    try {
+      return window.localStorage.getItem(FOCUS_BACKGROUND_KEY) === "1";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function saveFocusBackground() {
+    try {
+      window.localStorage.setItem(FOCUS_BACKGROUND_KEY, focusBackgroundEnabled ? "1" : "0");
+    } catch (error) {
+      showNotice("The focus background changed, but webOS could not save it.");
+    }
+  }
+
+  function updateFocusBackgroundButton() {
+    focusBackgroundButton.textContent = "Focus background: " + (focusBackgroundEnabled ? "On" : "Off");
+  }
+
+  function clearFocusBackground() {
+    focusBackdropElement.hidden = true;
+    focusBackdropImages.forEach(function (image) {
+      image.classList.remove("is-shown");
+      image.removeAttribute("src");
+      image.removeAttribute("data-src");
+    });
+  }
+
+  function showFocusBackgroundImage(front, back) {
+    back.classList.add("is-shown");
+    front.classList.remove("is-shown");
+    focusBackdropFront = 1 - focusBackdropFront;
+    focusBackdropElement.hidden = false;
+  }
+
+  function applyFocusBackground() {
+    var icon = "";
+    var front;
+    var back;
+    var token;
+    focusBackdropToken += 1;
+    token = focusBackdropToken;
+    if (focusBackgroundEnabled && selectedArea === "apps" && launchPoints[selectedIndex]) {
+      icon = iconFor(launchPoints[selectedIndex]);
+    }
+    if (!icon) {
+      clearFocusBackground();
+      return;
+    }
+    /* display:none would keep the icon from loading, so the black layer stays up until it does. */
+    focusBackdropElement.hidden = false;
+    front = focusBackdropImages[focusBackdropFront];
+    back = focusBackdropImages[1 - focusBackdropFront];
+    if (front.getAttribute("data-src") === icon && front.classList.contains("is-shown")) {
+      return;
+    }
+    if (back.getAttribute("data-src") === icon && back.complete && back.naturalWidth > 0) {
+      showFocusBackgroundImage(front, back);
+      return;
+    }
+    function reveal() {
+      if (token !== focusBackdropToken || back.getAttribute("data-src") !== icon) return;
+      focusBackdropToken += 1;
+      if (back.naturalWidth > 0) showFocusBackgroundImage(front, back);
+      else clearFocusBackground();
+    }
+    back.onload = reveal;
+    back.onerror = reveal;
+    back.setAttribute("data-src", icon);
+    back.src = icon;
+    if (back.complete) reveal();
   }
 
   function updateCustomText() {
@@ -760,6 +844,7 @@
     clearHeaderSelection();
     headerButtons[selectedHeaderIndex].classList.add("selected");
     if (focus !== false) headerButtons[selectedHeaderIndex].focus();
+    applyFocusBackground();
   }
 
   function activateHeader(index) {
@@ -780,6 +865,7 @@
     updateSortModeButton();
     updateFocusColorButton();
     updateBoxColorButton();
+    updateFocusBackgroundButton();
     updateCustomText();
     updateManageHiddenAppsButton();
     refreshStartupState();
@@ -812,6 +898,7 @@
     else if (button === resetOrderButton) requestOrderReset();
     else if (button === focusColorButton) toggleFocusColor();
     else if (button === boxColorButton) toggleBoxColor();
+    else if (button === focusBackgroundButton) toggleFocusBackground();
     else if (button === editCustomTextButton) openCustomTextEditor();
     else if (button === manageHiddenAppsButton) openHiddenApps();
     else if (button === startupButton) toggleStartup();
@@ -926,6 +1013,14 @@
     saveBoxColor();
     applyBoxColor();
     updateBoxColorButton();
+    selectSetting(selectedSettingsIndex, true);
+  }
+
+  function toggleFocusBackground() {
+    focusBackgroundEnabled = !focusBackgroundEnabled;
+    saveFocusBackground();
+    updateFocusBackgroundButton();
+    applyFocusBackground();
     selectSetting(selectedSettingsIndex, true);
   }
 
@@ -1065,6 +1160,7 @@
     updateSortModeButton();
     updateFocusColorButton();
     updateBoxColorButton();
+    updateFocusBackgroundButton();
     updateCustomText();
     updateManageHiddenAppsButton();
     updateClock();
@@ -1328,6 +1424,7 @@
         fillArt(art, titleFor(launchPoints[index]), iconFor(launchPoints[index]));
       }
     }
+    applyFocusBackground();
   }
 
   function makeButton(point, index) {
@@ -1588,6 +1685,7 @@
     var selected = buttons[selectedIndex];
     if (focus !== false) selected.focus();
     selected.scrollIntoView({ block: "nearest", inline: "nearest" });
+    applyFocusBackground();
   }
 
   function launch(point) {
