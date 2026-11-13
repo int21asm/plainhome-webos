@@ -2,6 +2,7 @@
   "use strict";
 
   var APP_ID = "com.github.int21asm.plainhome";
+  var APP_VERSION = "0.1.40";
   var COLUMNS = 6;
   var ORDER_KEY = "plainHomeOrderV1";
   var TIME_FORMAT_KEY = "plainHomeTimeFormatV1";
@@ -11,6 +12,7 @@
   var FOCUS_COLOR_KEY = "plainHomeFocusColorV1";
   var BOX_COLOR_KEY = "plainHomeBoxColorV1";
   var CUSTOM_TEXT_KEY = "plainHomeCustomTextV1";
+  var ICON_CACHE_KEY = "plainHomeIconCacheV1";
   var STARTUP_HOOK = "/var/lib/webosbrew/init.d/60-plainhome";
   var STARTUP_CONFIG = "/var/lib/webosbrew/plainhome.conf";
   var SHORTCUT_CAPTURE_REQUEST = "/tmp/plainhome-shortcut-capture.request";
@@ -361,8 +363,14 @@
   function stopWatcherCommand() {
     return "for PID_FILE in /tmp/plainhome-service.pid /tmp/plainhome-power.pid; do " +
       "if [ -f \"$PID_FILE\" ]; then PID=$(cat \"$PID_FILE\"); " +
-      "case \"$PID\" in ''|*[!0-9]*) ;; *) kill \"$PID\" 2>/dev/null || true ;; esac; " +
+      "case \"$PID\" in ''|*[!0-9]*) ;; *) kill \"$PID\" 2>/dev/null || true; " +
+      "WAITED=0; while kill -0 \"$PID\" 2>/dev/null && [ \"$WAITED\" -lt 80 ]; do usleep 100000; WAITED=$((WAITED + 1)); done ;; esac; " +
       "rm -f \"$PID_FILE\"; fi; done; ";
+  }
+
+  function releaseHomeKeyCommand() {
+    return "luna-send -n 1 luna://com.webos.service.config/setConfigs " +
+      "'{\"configs\":{\"com.webos.surfacemanager.disableHome\":false}}' >/dev/null 2>&1 || true; ";
   }
 
   function readShortcutConfigCommand() {
@@ -509,7 +517,7 @@
         "if { [ \"$BOOT_VALUE\" = 1 ] || [ \"$SHORTCUT_VALUE\" -gt 0 ]; } && [ -n \"$SVCDIR\" ]; then " +
         "printf 'boot=%s\\nhome=0\\nshortcut=%s\\n' \"$BOOT_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
-        "else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
+        "else " + releaseHomeKeyCommand() + "rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
     }
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
@@ -1121,6 +1129,25 @@
     }
   }
 
+  /* Line icon in the style of LG's "Input" (external device) glyph. */
+  function createInputIcon() {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "header-icon");
+    svg.setAttribute("viewBox", "8 6 36 36");
+    svg.setAttribute("aria-hidden", "true");
+    [
+      "M32 13H21a7 7 0 0 0 0 14h11Z",
+      "M32 20H41M41 16.5V23.5",
+      "M11 22v3a10 10 0 0 0 10 10h11"
+    ].forEach(function (data) {
+      var path = document.createElementNS(ns, "path");
+      path.setAttribute("d", data);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
   function loadInputs() {
     var command =
       "for p in " +
@@ -1154,7 +1181,8 @@
           button.setAttribute("data-dynamic-input", "true");
           button.setAttribute("data-app-id", String(input.id || ""));
           button.setAttribute("data-title", String(input.title || "Input"));
-          button.textContent = String(input.title || "Input");
+          button.appendChild(createInputIcon());
+          button.appendChild(document.createTextNode(String(input.title || "Input")));
           topActionsElement.insertBefore(button, configButton);
         });
         wireHeaderButtons();
@@ -1267,11 +1295,45 @@
     return trimmed ? trimmed.charAt(0).toUpperCase() : "•";
   }
 
+  /* The initial letter stays until the image has loaded, and comes back if it fails. */
+  function fillArt(art, title, icon) {
+    var initial = document.createElement("span");
+    art.textContent = "";
+    initial.className = "initial";
+    initial.textContent = firstCharacter(title);
+    art.appendChild(initial);
+    if (!icon) return;
+    var image = document.createElement("img");
+    image.alt = "";
+    image.onload = function () {
+      if (initial.parentNode) initial.parentNode.removeChild(initial);
+    };
+    image.onerror = function () {
+      if (image.parentNode) image.parentNode.removeChild(image);
+    };
+    image.src = icon;
+    art.appendChild(image);
+  }
+
+  function updateRenderedIcons(changedKeys) {
+    var index;
+    var art;
+    for (index = 0; index < launchPoints.length; index += 1) {
+      art = buttons[index] && buttons[index].querySelector(".art");
+      if (!art) continue;
+      /* Also retry tiles whose cached file failed to load (e.g. a wiped icons folder):
+         the path is unchanged, but the helper has just written the file again. */
+      if (changedKeys[keyFor(launchPoints[index])] === true ||
+          (!art.querySelector("img") && iconFor(launchPoints[index]))) {
+        fillArt(art, titleFor(launchPoints[index]), iconFor(launchPoints[index]));
+      }
+    }
+  }
+
   function makeButton(point, index) {
     var title = titleFor(point);
     var button = document.createElement("button");
     var art = document.createElement("span");
-    var initial = document.createElement("span");
     var label = document.createElement("span");
     var icon = iconFor(point);
 
@@ -1280,24 +1342,9 @@
     button.tabIndex = -1;
     button.setAttribute("aria-label", title);
     art.className = "art";
-    initial.className = "initial";
-    initial.textContent = firstCharacter(title);
     label.className = "label";
     label.textContent = title;
-    art.appendChild(initial);
-
-    if (icon) {
-      var image = document.createElement("img");
-      image.alt = "";
-      image.onload = function () {
-        if (initial.parentNode) initial.parentNode.removeChild(initial);
-      };
-      image.onerror = function () {
-        if (image.parentNode) image.parentNode.removeChild(image);
-      };
-      image.src = icon;
-      art.appendChild(image);
-    }
+    fillArt(art, title, icon);
 
     button.appendChild(art);
     button.appendChild(label);
@@ -1357,7 +1404,16 @@
     });
     if (hiddenAppKeys.length !== previousHiddenCount) saveHiddenAppKeys();
     catalogPoints = points;
-    hydrateLocalIcons(points, function () {
+    var cachedIcons = readIconCache();
+    var usedCache = false;
+    points.forEach(function (point) {
+      var cached = cachedIcons[keyFor(point)];
+      if (typeof cached === "string" && cached.indexOf("icons/") === 0) {
+        point._localIcon = cached;
+        usedCache = true;
+      }
+    });
+    function show() {
       var visiblePoints = visibleCatalogPoints();
       var preferredIndex = refreshSelectionIndex;
       if (refreshSelectionKey) {
@@ -1370,21 +1426,52 @@
       refreshSelectionKey = "";
       updateManageHiddenAppsButton();
       render(visiblePoints, preferredIndex);
-    });
+    }
+    if (usedCache) {
+      /* Copying icons starts Node as root, which takes about 2 s on webOS 6. Show the cached
+         icons now and only swap the tiles whose icon changed once the copy finishes. */
+      show();
+      hydrateLocalIcons(points, false, function (changedKeys) {
+        if (points === catalogPoints) updateRenderedIcons(changedKeys);
+      });
+    } else {
+      hydrateLocalIcons(points, true, show);
+    }
+  }
+
+  function readIconCache() {
+    try {
+      var value = JSON.parse(window.localStorage.getItem(ICON_CACHE_KEY) || "{}");
+      if (value && value.version === APP_VERSION && value.icons && typeof value.icons === "object") {
+        return value.icons;
+      }
+    } catch (error) {
+      /* Fall through to an empty cache. */
+    }
+    return {};
+  }
+
+  function saveIconCache(icons) {
+    try {
+      window.localStorage.setItem(ICON_CACHE_KEY, JSON.stringify({ version: APP_VERSION, icons: icons }));
+    } catch (error) {
+      /* The cache only speeds up the next launch. */
+    }
   }
 
   function utf8Base64(value) {
     return window.btoa(unescape(encodeURIComponent(value)));
   }
 
-  function hydrateLocalIcons(points, done) {
+  function hydrateLocalIcons(points, showLoading, done) {
     var completed = false;
     var timeout;
+    var changedKeys = {};
     function finish() {
       if (completed) return;
       completed = true;
       if (timeout) window.clearTimeout(timeout);
-      done();
+      done(changedKeys);
     }
     var requests = points.slice(0, 512).map(function (point) {
       return {
@@ -1404,7 +1491,7 @@
       "if [ -f \"$p\" ]; then exec node \"$p\" '" + encoded + "'; fi; done; " +
       "printf '{\"icons\":{}}'";
 
-    showStatus("Loading app icons…");
+    if (showLoading) showStatus("Loading app icons…");
     timeout = window.setTimeout(finish, 6000);
 
     lunaCall(
@@ -1414,12 +1501,15 @@
         try {
           var result = JSON.parse(String(response.stdoutString || "{}"));
           var icons = result.icons || {};
+          var cache = {};
           points.forEach(function (point) {
             var key = String(point.launchPointId || idFor(point));
-            if (typeof icons[key] === "string") {
-              point._localIcon = icons[key] + "?v=0.1.40";
-            }
+            var icon = typeof icons[key] === "string" ? icons[key] + "?v=" + APP_VERSION : undefined;
+            if (icon !== point._localIcon) changedKeys[key] = true;
+            point._localIcon = icon;
+            if (icon) cache[key] = icon;
           });
+          if (result.icons) saveIconCache(cache);
         } catch (error) {
           /* Keep the initial fallback when icon hydration fails. */
         }

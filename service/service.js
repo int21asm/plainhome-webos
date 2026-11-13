@@ -12,8 +12,17 @@ var CAPTURE_RESULT_FILE = "/tmp/plainhome-shortcut-capture.result";
 var HOME_KEY_CODE = 773;
 var INPUT_EVENT_SIZE = 16;
 var INPUT_POLL_MS = 100;
+var HOME_LAUNCH_DELAY_MS = 350;
+/* Surface-manager config read by KeyFilters/systemUi.js: when true, the Home key no longer
+   launches com.webos.app.home. Runtime-only (configd does not persist it), so a reboot or a
+   configd restart brings LG Home back by itself. */
+var DISABLE_HOME_CONFIG = "com.webos.surfacemanager.disableHome";
+var HOME_LOCK = "/tmp/plainhome-home.lock";
+var HOME_OWNER_FILE = "/tmp/plainhome-home-owner";
 var homeButtonEnabled = process.argv.indexOf("--home") !== -1 || process.argv.indexOf("--watch") !== -1;
 var shortcutCode = readShortcutCode();
+var lgHomeSuppressed = false;
+var watchedInputDevices = 0;
 
 try {
   fs.writeFileSync(PID_FILE, String(process.pid));
@@ -54,6 +63,62 @@ function saveShortcutCode(code) {
   if (!lines.some(function (line) { return line.indexOf("home=") === 0; })) lines.push("home=0");
   lines.push("shortcut=" + code);
   fs.writeFileSync(CONFIG_FILE, lines.join("\n") + "\n");
+}
+
+function setLgHomeDisabled(disabled) {
+  var flag = disabled ? "true" : "false";
+  var pid = String(process.pid);
+  var output = "";
+  /* Claim or release under one lock so a dying watcher cannot clear disableHome
+     after a replacement watcher has taken the key. */
+  var script =
+    "owner=$(cat " + HOME_OWNER_FILE + " 2>/dev/null || true); " +
+    "case \"$owner\" in ''|*[!0-9]*) owner=0 ;; esac; " +
+    "if [ " + flag + " = false ] && [ \"$owner\" != " + pid + " ]; then printf skipped; exit 0; fi; " +
+    "if [ " + flag + " = true ]; then printf '%s\\n' " + pid + " > " + HOME_OWNER_FILE + "; fi; " +
+    "output=$(/usr/bin/luna-send -n 1 luna://com.webos.service.config/setConfigs " +
+    "'{\"configs\":{\"" + DISABLE_HOME_CONFIG + "\":" + flag + "}}') || " +
+    "{ if [ " + flag + " = true ] && [ \"$(cat " + HOME_OWNER_FILE + " 2>/dev/null)\" = " + pid + " ]; then rm -f " + HOME_OWNER_FILE + "; fi; exit 1; }; " +
+    "printf '%s\\n' \"$output\" | grep -q '\"returnValue\":true' || " +
+    "{ if [ " + flag + " = true ] && [ \"$(cat " + HOME_OWNER_FILE + " 2>/dev/null)\" = " + pid + " ]; then rm -f " + HOME_OWNER_FILE + "; fi; exit 1; }; " +
+    "if [ " + flag + " = false ] && [ \"$(cat " + HOME_OWNER_FILE + " 2>/dev/null)\" = " + pid + " ]; then rm -f " + HOME_OWNER_FILE + "; fi; " +
+    "printf '%s\\n' \"$output\"";
+  try {
+    output = String(childProcess.execFileSync(
+      "/usr/bin/flock",
+      ["-w", "8", HOME_LOCK, "sh", "-c", script],
+      { timeout: 12000 }
+    ));
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      try {
+        output = String(childProcess.execFileSync("sh", ["-c", script], { timeout: 8000 }));
+      } catch (fallbackError) {
+        log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + " failed: " + fallbackError.message);
+        return false;
+      }
+    } else {
+      log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + " failed: " + error.message);
+      return false;
+    }
+  }
+  log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + ": " + output.replace(/\s+/g, " ").slice(0, 200));
+  return output.indexOf("skipped") !== -1 || /"returnValue"\s*:\s*true/.test(output);
+}
+
+function suppressLgHome() {
+  lgHomeSuppressed = setLgHomeDisabled(true);
+  if (!lgHomeSuppressed) return;
+  /* Restore LG Home on the way out only while this process still owns the key. */
+  process.on("exit", function () {
+    if (lgHomeSuppressed) setLgHomeDisabled(false);
+  });
+  ["SIGTERM", "SIGINT", "SIGHUP"].forEach(function (signal) {
+    process.on(signal, function () {
+      log("received " + signal + ", exiting");
+      process.exit(0);
+    });
+  });
 }
 
 function launch(reason, attempt, callback) {
@@ -175,7 +240,7 @@ function watchRemoteButtons() {
     });
   } catch (error) {
     log("cannot read /dev/input: " + error.message);
-    return;
+    return 0;
   }
   names.forEach(function (name) {
     try {
@@ -188,6 +253,7 @@ function watchRemoteButtons() {
     }
   });
   log("Remote button watcher is reading " + descriptors.length + " input devices");
+  if (!descriptors.length) return 0;
   setInterval(function () {
     descriptors.forEach(function (descriptor) {
       var bytes;
@@ -225,9 +291,10 @@ function watchRemoteButtons() {
         if (homeButtonEnabled && keyCode === HOME_KEY_CODE && Date.now() - lastHomePress > 1200) {
           lastHomePress = Date.now();
           log("Home button pressed");
+          /* With LG Home suppressed there is nothing to wait for. */
           setTimeout(function () {
             launchWithRetry("home-key", 3, 500);
-          }, 350);
+          }, lgHomeSuppressed ? 0 : HOME_LAUNCH_DELAY_MS);
         } else if (
           shortcutCode > 0 &&
           keyCode === shortcutCode &&
@@ -243,6 +310,7 @@ function watchRemoteButtons() {
       }
     });
   }, INPUT_POLL_MS);
+  return descriptors.length;
 }
 
 log("startup/wake watcher started, pid=" + process.pid);
@@ -257,5 +325,9 @@ if (
   process.argv.indexOf("--shortcut") !== -1 ||
   process.argv.indexOf("--capture") !== -1
 ) {
-  watchRemoteButtons();
+  watchedInputDevices = watchRemoteButtons();
+}
+/* Only take the Home key away from LG when this watcher can actually see it. */
+if (homeButtonEnabled && watchedInputDevices > 0) {
+  suppressLgHome();
 }

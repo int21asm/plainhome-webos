@@ -44,7 +44,6 @@ body {
   padding: 16px 48px 10px;
   display: flex;
   align-items: center;
-  gap: 28px;
   border-bottom: 2px solid #202020;
 }
 
@@ -53,8 +52,13 @@ body {
   min-width: 0;
   display: flex;
   align-items: baseline;
-  gap: 28px;
   white-space: nowrap;
+}
+
+/* Spacing via margins: flexbox gap needs Chrome 84, webOS 6 ships Chrome 79.
+   A trailing margin per item keeps hidden items (display: none) from leaving a gap. */
+#date-time > * {
+  margin-right: 28px;
 }
 
 #clock,
@@ -94,7 +98,10 @@ body {
 #top-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+}
+
+#top-actions > * + * {
+  margin-left: 12px;
 }
 
 #top-actions button {
@@ -110,6 +117,28 @@ body {
   font-size: 34px;
   font-weight: 600;
   line-height: 44px;
+}
+
+#top-actions button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.header-icon {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  margin-right: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The gear is drawn on a 24-unit grid (the input icon on 36), so a thinner stroke matches it. */
+.gear-icon {
+  stroke-width: 2;
 }
 
 #top-actions button.selected,
@@ -145,7 +174,6 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   transform: scale(1);
   transition: transform 100ms ease, border-color 100ms ease, background 100ms ease;
 }
@@ -192,6 +220,7 @@ body {
 
 .label {
   width: 100%;
+  margin-top: 6px;
   min-height: 40px;
   overflow: hidden;
   text-align: center;
@@ -204,7 +233,10 @@ body {
 
 #status {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +281,10 @@ body {
 #hidden-apps,
 #custom-text-editor {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 20;
   display: flex;
   align-items: center;
@@ -260,6 +295,11 @@ body {
 
 #confirm {
   z-index: 35;
+}
+
+/* Eleven options plus help text need more than 1080 - 2 * 80 px. */
+#settings {
+  padding: 20px 80px;
 }
 
 #hidden-apps {
@@ -297,8 +337,8 @@ body {
 }
 
 .settings-panel {
-  width: 780px;
-  max-height: 920px;
+  width: 860px;
+  max-height: 1040px;
   padding: 32px 54px 26px;
   border: 3px solid #fff;
   border-radius: 22px;
@@ -418,7 +458,10 @@ body {
 .editor-actions {
   margin-top: 20px;
   display: flex;
-  gap: 16px;
+}
+
+.editor-actions > * + * {
+  margin-left: 16px;
 }
 
 .editor-actions button {
