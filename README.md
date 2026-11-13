@@ -63,11 +63,11 @@ Because webOS blocks one app from reading another app's icon, the Homebrew helpe
 
 Starting that helper takes about two seconds on older TVs, so PlainHome keeps the copied icon paths in its local storage. After the first run the grid is drawn immediately from that cache, the helper refreshes it in the background, and only tiles whose icon changed are redrawn. Copied icons have stable names (app ID plus the source file's size and modification time), so unchanged icons are not copied again.
 
-The startup, Home-button, and remote-shortcut features are disabled until enabled in Config. Enabling any of them creates `/var/lib/webosbrew/plainhome.conf` and a `60-plainhome` symlink in `/var/lib/webosbrew/init.d/` to PlainHome's packaged startup script.
+The startup, Home-button, and remote-shortcut features are disabled until enabled in Config. Enabling any of them creates `/var/lib/webosbrew/plainhome.conf` and a `00-plainhome` symlink in `/var/lib/webosbrew/init.d/` to PlainHome's packaged startup script.
 
 ### Startup and Home-button hook
 
-The startup option subscribes to webOS power-state changes; it does not poll continuously. At a full boot it launches PlainHome with bounded retries, stopping as soon as webOS confirms a successful launch. On a real suspend-to-active transition it launches PlainHome again. Screen-saver transitions are ignored so watching a video does not unexpectedly return to the launcher.
+The startup option subscribes to webOS power-state changes; it does not poll continuously. At a full boot the startup script launches PlainHome as soon as Application Manager answers, then closes LG Home for a few seconds so the stock menu cannot stay in front. PlainHome's own window is black until the grid is drawn. The system can still paint LG Home for a moment before this script runs. On a real suspend-to-active transition it launches PlainHome again. Screen-saver transitions are ignored so watching a video does not unexpectedly return to the launcher.
 
 The Home-button option starts a read-only Linux input watcher as root. It:
 

@@ -13,6 +13,39 @@ case "$SHORTCUT_CODE" in
 esac
 [ "$BOOT_ENABLED" = 1 ] || [ "$HOME_ENABLED" = 1 ] || [ "$SHORTCUT_CODE" -gt 0 ] || [ -f "$CAPTURE_REQUEST" ] || exit 0
 
+# Cold boot draws LG Home before this hook is scheduled. Launch PlainHome as soon as
+# Application Manager answers, then keep closing the stock home. PlainHome's first
+# frame is black, so that window replaces the LG menu instead of sitting behind it.
+if [ "$BOOT_ENABLED" = 1 ]; then
+  (
+    i=0
+    launched=0
+    while [ "$i" -lt 40 ]; do
+      out=$(luna-send -n 1 luna://com.webos.applicationManager/launch \
+        '{"id":"com.github.int21asm.plainhome"}' 2>/dev/null || true)
+      if echo "$out" | grep -q '"returnValue":true'; then
+        launched=1
+        break
+      fi
+      usleep 250000
+      i=$((i + 1))
+    done
+    if [ "$launched" = 1 ]; then
+      j=0
+      while [ "$j" -lt 20 ]; do
+        luna-send -n 1 luna://com.webos.applicationManager/closeByAppId \
+          '{"id":"com.webos.app.home"}' >/dev/null 2>&1 || true
+        usleep 200000
+        j=$((j + 1))
+      done
+    fi
+  ) >/tmp/plainhome-boot-cover.log 2>&1 &
+fi
+if [ "$HOME_ENABLED" = 1 ]; then
+  luna-send -n 1 luna://com.webos.service.config/setConfigs \
+    '{"configs":{"com.webos.surfacemanager.disableHome":true}}' >/dev/null 2>&1 || true
+fi
+
 PERMISSION_FILE=/var/luna-service2-dev/client-permissions.d/com.github.int21asm.plainhome.app.json
 PERMISSION_JSON='{"com.github.int21asm.plainhome-*":["public","applications.launch","applications.internal","com.github.int21asm.plainhome.service.group"]}'
 if [ -d /var/luna-service2-dev/client-permissions.d ] && [ "$(cat "$PERMISSION_FILE" 2>/dev/null)" != "$PERMISSION_JSON" ]; then
@@ -26,6 +59,11 @@ if [ ! -f "$SVCDIR/service.js" ]; then
   SVCDIR=/media/cryptofs/apps/usr/palm/services/com.github.int21asm.plainhome.service
 fi
 [ -f "$SVCDIR/service.js" ] || exit 0
+if [ -L /var/lib/webosbrew/init.d/60-plainhome ]; then
+  mkdir -p /var/lib/webosbrew/init.d
+  ln -sf "$SVCDIR/autostart.sh" /var/lib/webosbrew/init.d/00-plainhome
+  rm -f /var/lib/webosbrew/init.d/60-plainhome
+fi
 
 export NODE_PATH=/usr/lib/node_modules:/usr/lib/nodejs
 cd "$SVCDIR"

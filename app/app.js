@@ -15,7 +15,8 @@
   var CUSTOM_TEXT_KEY = "plainHomeCustomTextV1";
   var ICON_CACHE_KEY = "plainHomeIconCacheV1";
   var CATALOG_URL = "https://repo.webosbrew.org/api/apps.json";
-  var STARTUP_HOOK = "/var/lib/webosbrew/init.d/60-plainhome";
+  var STARTUP_HOOK = "/var/lib/webosbrew/init.d/00-plainhome";
+  var OLD_STARTUP_HOOK = "/var/lib/webosbrew/init.d/60-plainhome";
   var STARTUP_CONFIG = "/var/lib/webosbrew/plainhome.conf";
   var SHORTCUT_CAPTURE_REQUEST = "/tmp/plainhome-shortcut-capture.request";
   var SHORTCUT_CAPTURE_RESULT = "/tmp/plainhome-shortcut-capture.result";
@@ -476,7 +477,7 @@
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
       {
-        command: "if [ -L " + STARTUP_HOOK + " ] && [ -f " + STARTUP_CONFIG +
+        command: "if { [ -L " + STARTUP_HOOK + " ] || [ -L " + OLD_STARTUP_HOOK + " ]; } && [ -f " + STARTUP_CONFIG +
           " ] && grep -q '^boot=1$' " + STARTUP_CONFIG +
           "; then printf enabled; else printf disabled; fi"
       },
@@ -496,7 +497,7 @@
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
       {
-        command: "if [ -L " + STARTUP_HOOK + " ] && [ -f " + STARTUP_CONFIG +
+        command: "if { [ -L " + STARTUP_HOOK + " ] || [ -L " + OLD_STARTUP_HOOK + " ]; } && [ -f " + STARTUP_CONFIG +
           " ] && grep -q '^home=1$' " + STARTUP_CONFIG +
           "; then printf enabled; else printf disabled; fi"
       },
@@ -544,7 +545,7 @@
         "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
         "HOME_VALUE=0; grep -q '^home=1$' " + STARTUP_CONFIG + " 2>/dev/null && HOME_VALUE=1; " +
         readShortcutConfigCommand() +
-        "mkdir -p /var/lib/webosbrew/init.d; " +
+        "mkdir -p /var/lib/webosbrew/init.d; rm -f " + OLD_STARTUP_HOOK + "; " +
         "printf 'boot=1\\nhome=%s\\nshortcut=%s\\n' \"$HOME_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
         "\"$SVCDIR/autostart.sh\"; printf enabled";
@@ -555,8 +556,8 @@
         readShortcutConfigCommand() +
         "if { [ \"$HOME_VALUE\" = 1 ] || [ \"$SHORTCUT_VALUE\" -gt 0 ]; } && [ -n \"$SVCDIR\" ]; then " +
         "printf 'boot=0\\nhome=%s\\nshortcut=%s\\n' \"$HOME_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
-        "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
-        "else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
+        "rm -f " + OLD_STARTUP_HOOK + "; ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
+        "else rm -f " + STARTUP_HOOK + " " + OLD_STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
     }
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
@@ -598,7 +599,7 @@
         "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
         "BOOT_VALUE=0; grep -q '^boot=1$' " + STARTUP_CONFIG + " 2>/dev/null && BOOT_VALUE=1; " +
         readShortcutConfigCommand() +
-        "mkdir -p /var/lib/webosbrew/init.d; " +
+        "mkdir -p /var/lib/webosbrew/init.d; rm -f " + OLD_STARTUP_HOOK + "; " +
         "printf 'boot=%s\\nhome=1\\nshortcut=%s\\n' \"$BOOT_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
         "\"$SVCDIR/autostart.sh\"; printf enabled";
@@ -608,8 +609,8 @@
         readShortcutConfigCommand() +
         "if { [ \"$BOOT_VALUE\" = 1 ] || [ \"$SHORTCUT_VALUE\" -gt 0 ]; } && [ -n \"$SVCDIR\" ]; then " +
         "printf 'boot=%s\\nhome=0\\nshortcut=%s\\n' \"$BOOT_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
-        "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
-        "else " + releaseHomeKeyCommand() + "rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
+        "rm -f " + OLD_STARTUP_HOOK + "; ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
+        "else " + releaseHomeKeyCommand() + "rm -f " + STARTUP_HOOK + " " + OLD_STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
     }
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
@@ -721,7 +722,7 @@
       "if [ -z \"$SVCDIR\" ]; then printf service-missing; exit 1; fi; " +
       "if [ ! -f " + STARTUP_CONFIG + " ]; then printf 'boot=0\\nhome=0\\n' > " + STARTUP_CONFIG + "; fi; " +
       "rm -f " + SHORTCUT_CAPTURE_RESULT + "; : > " + SHORTCUT_CAPTURE_REQUEST + "; " +
-      "mkdir -p /var/lib/webosbrew/init.d; ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
+      "mkdir -p /var/lib/webosbrew/init.d; rm -f " + OLD_STARTUP_HOOK + "; ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; " +
       "\"$SVCDIR/autostart.sh\"; printf capturing";
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
@@ -751,7 +752,7 @@
       "grep -q '^boot=1$' " + STARTUP_CONFIG + " 2>/dev/null && BOOT_VALUE=1; " +
       "grep -q '^home=1$' " + STARTUP_CONFIG + " 2>/dev/null && HOME_VALUE=1; " +
       "if { [ \"$BOOT_VALUE\" = 1 ] || [ \"$HOME_VALUE\" = 1 ]; } && [ -n \"$SVCDIR\" ]; then " +
-      "\"$SVCDIR/autostart.sh\"; else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf cleared";
+      "\"$SVCDIR/autostart.sh\"; else rm -f " + STARTUP_HOOK + " " + OLD_STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf cleared";
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",
       { command: command },

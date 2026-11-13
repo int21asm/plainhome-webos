@@ -316,9 +316,7 @@ function watchRemoteButtons() {
 log("startup/wake watcher started, pid=" + process.pid);
 if (process.argv.indexOf("--boot") !== -1) {
   startPowerMonitor();
-  setTimeout(function () {
-    launchWithRetry("boot", 8, 2000);
-  }, 1000);
+  launchWithRetry("boot", 8, 2000);
 }
 if (
   homeButtonEnabled ||
