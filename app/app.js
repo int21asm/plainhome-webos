@@ -363,8 +363,14 @@
   function stopWatcherCommand() {
     return "for PID_FILE in /tmp/plainhome-service.pid /tmp/plainhome-power.pid; do " +
       "if [ -f \"$PID_FILE\" ]; then PID=$(cat \"$PID_FILE\"); " +
-      "case \"$PID\" in ''|*[!0-9]*) ;; *) kill \"$PID\" 2>/dev/null || true ;; esac; " +
+      "case \"$PID\" in ''|*[!0-9]*) ;; *) kill \"$PID\" 2>/dev/null || true; " +
+      "WAITED=0; while kill -0 \"$PID\" 2>/dev/null && [ \"$WAITED\" -lt 80 ]; do usleep 100000; WAITED=$((WAITED + 1)); done ;; esac; " +
       "rm -f \"$PID_FILE\"; fi; done; ";
+  }
+
+  function releaseHomeKeyCommand() {
+    return "luna-send -n 1 luna://com.webos.service.config/setConfigs " +
+      "'{\"configs\":{\"com.webos.surfacemanager.disableHome\":false}}' >/dev/null 2>&1 || true; ";
   }
 
   function readShortcutConfigCommand() {
@@ -511,7 +517,7 @@
         "if { [ \"$BOOT_VALUE\" = 1 ] || [ \"$SHORTCUT_VALUE\" -gt 0 ]; } && [ -n \"$SVCDIR\" ]; then " +
         "printf 'boot=%s\\nhome=0\\nshortcut=%s\\n' \"$BOOT_VALUE\" \"$SHORTCUT_VALUE\" > " + STARTUP_CONFIG + "; " +
         "ln -sf \"$SVCDIR/autostart.sh\" " + STARTUP_HOOK + "; \"$SVCDIR/autostart.sh\"; " +
-        "else rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
+        "else " + releaseHomeKeyCommand() + "rm -f " + STARTUP_HOOK + " " + STARTUP_CONFIG + "; fi; printf disabled";
     }
     lunaCall(
       "luna://org.webosbrew.hbchannel.service/exec",

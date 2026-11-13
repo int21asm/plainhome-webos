@@ -17,6 +17,8 @@ var HOME_LAUNCH_DELAY_MS = 350;
    launches com.webos.app.home. Runtime-only (configd does not persist it), so a reboot or a
    configd restart brings LG Home back by itself. */
 var DISABLE_HOME_CONFIG = "com.webos.surfacemanager.disableHome";
+var HOME_LOCK = "/tmp/plainhome-home.lock";
+var HOME_OWNER_FILE = "/tmp/plainhome-home-owner";
 var homeButtonEnabled = process.argv.indexOf("--home") !== -1 || process.argv.indexOf("--watch") !== -1;
 var shortcutCode = readShortcutCode();
 var lgHomeSuppressed = false;
@@ -64,27 +66,50 @@ function saveShortcutCode(code) {
 }
 
 function setLgHomeDisabled(disabled) {
-  var configs = {};
-  var output;
-  configs[DISABLE_HOME_CONFIG] = disabled;
+  var flag = disabled ? "true" : "false";
+  var pid = String(process.pid);
+  var output = "";
+  /* Claim or release under one lock so a dying watcher cannot clear disableHome
+     after a replacement watcher has taken the key. */
+  var script =
+    "owner=$(cat " + HOME_OWNER_FILE + " 2>/dev/null || true); " +
+    "case \"$owner\" in ''|*[!0-9]*) owner=0 ;; esac; " +
+    "if [ " + flag + " = false ] && [ \"$owner\" != " + pid + " ]; then printf skipped; exit 0; fi; " +
+    "if [ " + flag + " = true ]; then printf '%s\\n' " + pid + " > " + HOME_OWNER_FILE + "; fi; " +
+    "output=$(/usr/bin/luna-send -n 1 luna://com.webos.service.config/setConfigs " +
+    "'{\"configs\":{\"" + DISABLE_HOME_CONFIG + "\":" + flag + "}}') || " +
+    "{ if [ " + flag + " = true ] && [ \"$(cat " + HOME_OWNER_FILE + " 2>/dev/null)\" = " + pid + " ]; then rm -f " + HOME_OWNER_FILE + "; fi; exit 1; }; " +
+    "printf '%s\\n' \"$output\" | grep -q '\"returnValue\":true' || " +
+    "{ if [ " + flag + " = true ] && [ \"$(cat " + HOME_OWNER_FILE + " 2>/dev/null)\" = " + pid + " ]; then rm -f " + HOME_OWNER_FILE + "; fi; exit 1; }; " +
+    "if [ " + flag + " = false ] && [ \"$(cat " + HOME_OWNER_FILE + " 2>/dev/null)\" = " + pid + " ]; then rm -f " + HOME_OWNER_FILE + "; fi; " +
+    "printf '%s\\n' \"$output\"";
   try {
     output = String(childProcess.execFileSync(
-      "/usr/bin/luna-send",
-      ["-n", "1", "luna://com.webos.service.config/setConfigs", JSON.stringify({ configs: configs })],
-      { timeout: 5000 }
+      "/usr/bin/flock",
+      ["-w", "8", HOME_LOCK, "sh", "-c", script],
+      { timeout: 12000 }
     ));
   } catch (error) {
-    log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + " failed: " + error.message);
-    return false;
+    if (error && error.code === "ENOENT") {
+      try {
+        output = String(childProcess.execFileSync("sh", ["-c", script], { timeout: 8000 }));
+      } catch (fallbackError) {
+        log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + " failed: " + fallbackError.message);
+        return false;
+      }
+    } else {
+      log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + " failed: " + error.message);
+      return false;
+    }
   }
   log("setConfigs " + DISABLE_HOME_CONFIG + "=" + disabled + ": " + output.replace(/\s+/g, " ").slice(0, 200));
-  return /"returnValue"\s*:\s*true/.test(output);
+  return output.indexOf("skipped") !== -1 || /"returnValue"\s*:\s*true/.test(output);
 }
 
 function suppressLgHome() {
   lgHomeSuppressed = setLgHomeDisabled(true);
   if (!lgHomeSuppressed) return;
-  /* Give the Home key back to LG whenever this watcher stops, crashes or is killed. */
+  /* Restore LG Home on the way out only while this process still owns the key. */
   process.on("exit", function () {
     if (lgHomeSuppressed) setLgHomeDisabled(false);
   });
