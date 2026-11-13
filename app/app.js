@@ -14,6 +14,7 @@
   var FOCUS_BACKGROUND_KEY = "plainHomeFocusBackgroundV1";
   var CUSTOM_TEXT_KEY = "plainHomeCustomTextV1";
   var ICON_CACHE_KEY = "plainHomeIconCacheV1";
+  var CATALOG_URL = "https://repo.webosbrew.org/api/apps.json";
   var STARTUP_HOOK = "/var/lib/webosbrew/init.d/60-plainhome";
   var STARTUP_CONFIG = "/var/lib/webosbrew/plainhome.conf";
   var SHORTCUT_CAPTURE_REQUEST = "/tmp/plainhome-shortcut-capture.request";
@@ -44,6 +45,8 @@
   var customTextElement = document.getElementById("custom-text");
   var topActionsElement = document.getElementById("top-actions");
   var settingsElement = document.getElementById("settings");
+  var catalogElement = document.getElementById("catalog");
+  var catalogListElement = document.getElementById("catalog-list");
   var timeFormatButton = document.getElementById("time-format");
   var dateFormatButton = document.getElementById("date-format");
   var sortModeButton = document.getElementById("sort-mode");
@@ -87,6 +90,11 @@
   var refreshSelectionKey = "";
   var refreshSelectionIndex = 0;
   var settingsOpen = false;
+  var catalogOpen = false;
+  var catalogItems = [];
+  var catalogButtons = [];
+  var selectedCatalogIndex = 0;
+  var catalogBusy = false;
   var selectedSettingsIndex = 0;
   var hiddenAppsOpen = false;
   var hiddenAppButtons = [];
@@ -854,6 +862,10 @@
       openSettings();
       return;
     }
+    if (button.getAttribute("data-action") === "catalog") {
+      openCatalog();
+      return;
+    }
     var appId = String(button.getAttribute("data-app-id") || "");
     if (appId) launch({ id: appId, title: button.getAttribute("data-title") || button.textContent });
   }
@@ -1192,6 +1204,267 @@
     });
   }
 
+  function requestText(url, onSuccess, onFailure) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.timeout = 20000;
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) onSuccess(xhr.responseText);
+      else onFailure("Could not load the app catalog.");
+    };
+    xhr.onerror = function () {
+      onFailure("Could not load the app catalog.");
+    };
+    xhr.ontimeout = xhr.onerror;
+    try {
+      xhr.send();
+    } catch (error) {
+      onFailure("Could not load the app catalog.");
+    }
+  }
+
+  function plainText(value) {
+    return String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+  }
+
+  function catalogActionLabel(item) {
+    var installed = installedCatalogVersion(item.id);
+    var version = item.manifest && item.manifest.version ? String(item.manifest.version) : "";
+    if (installed === null) return "Install";
+    if (installed && version && installed !== version) return "Update";
+    return "Reinstall";
+  }
+
+  function installedCatalogVersion(id) {
+    var index;
+    for (index = 0; index < discoveredPoints.length; index += 1) {
+      if (idFor(discoveredPoints[index]) === id) return String(discoveredPoints[index].version || "");
+    }
+    return null;
+  }
+
+  function parseCatalog(text) {
+    var data = JSON.parse(text);
+    var packages = data && Array.isArray(data.packages) ? data.packages : [];
+    return packages.filter(function (item) {
+      var manifest = item && item.manifest;
+      var hash = manifest && manifest.ipkHash && manifest.ipkHash.sha256;
+      var url = manifest && String(manifest.ipkUrl || "");
+      return item && item.id && item.title && url.indexOf("https://") === 0 && /^[a-f0-9]{64}$/i.test(String(hash || ""));
+    }).sort(function (left, right) {
+      var leftTitle = String(left.title).toLocaleLowerCase();
+      var rightTitle = String(right.title).toLocaleLowerCase();
+      if (leftTitle < rightTitle) return -1;
+      if (leftTitle > rightTitle) return 1;
+      return 0;
+    });
+  }
+
+  function catalogMessage(message) {
+    catalogListElement.textContent = "";
+    catalogButtons = [];
+    var paragraph = document.createElement("p");
+    paragraph.className = "catalog-message";
+    paragraph.textContent = message;
+    catalogListElement.appendChild(paragraph);
+  }
+
+  function updateCatalogActions() {
+    catalogButtons.forEach(function (button, index) {
+      var action = button.querySelector(".catalog-action");
+      if (!action || !catalogItems[index]) return;
+      if (catalogBusy && index === selectedCatalogIndex && action.getAttribute("data-busy") === "1") return;
+      action.removeAttribute("data-busy");
+      action.textContent = catalogActionLabel(catalogItems[index]);
+    });
+  }
+
+  function renderCatalog(items) {
+    catalogItems = items;
+    catalogListElement.textContent = "";
+    catalogButtons = [];
+    if (!items.length) {
+      catalogMessage("The catalog did not list any apps.");
+      return;
+    }
+    items.forEach(function (item, index) {
+      var button = document.createElement("button");
+      var art = document.createElement("span");
+      var copy = document.createElement("span");
+      var title = document.createElement("span");
+      var detail = document.createElement("span");
+      var action = document.createElement("span");
+      var image = document.createElement("img");
+      var description = plainText(item.shortDescription || (item.manifest && item.manifest.appDescription));
+      var version = item.manifest && item.manifest.version ? " · " + item.manifest.version : "";
+      button.type = "button";
+      button.className = "catalog-option";
+      button.tabIndex = -1;
+      art.className = "catalog-art";
+      copy.className = "catalog-copy";
+      title.className = "catalog-title";
+      detail.className = "catalog-detail";
+      action.className = "catalog-action";
+      title.textContent = item.title;
+      detail.textContent = (description || item.id) + version;
+      action.textContent = catalogActionLabel(item);
+      image.alt = "";
+      image.src = String(item.iconUri || "");
+      image.onerror = function () {
+        if (image.parentNode) image.parentNode.removeChild(image);
+      };
+      if (item.iconUri) art.appendChild(image);
+      else art.textContent = String(item.title).charAt(0).toUpperCase();
+      copy.appendChild(title);
+      copy.appendChild(detail);
+      button.appendChild(art);
+      button.appendChild(copy);
+      button.appendChild(action);
+      button.addEventListener("click", function () {
+        selectCatalog(index, false);
+        installCatalogItem(index);
+      });
+      button.addEventListener("mouseover", function () {
+        selectCatalog(index, false);
+      });
+      catalogButtons.push(button);
+      catalogListElement.appendChild(button);
+    });
+    selectCatalog(selectedCatalogIndex, true);
+  }
+
+  function selectCatalog(index, focus) {
+    if (!catalogButtons.length) return;
+    selectedCatalogIndex = Math.max(0, Math.min(catalogButtons.length - 1, index));
+    catalogButtons.forEach(function (button, buttonIndex) {
+      if (buttonIndex === selectedCatalogIndex) button.classList.add("selected");
+      else button.classList.remove("selected");
+    });
+    if (focus !== false) catalogButtons[selectedCatalogIndex].focus();
+    catalogButtons[selectedCatalogIndex].scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  function setCatalogAction(index, text, busy) {
+    var action = catalogButtons[index] && catalogButtons[index].querySelector(".catalog-action");
+    if (!action) return;
+    action.textContent = text;
+    if (busy) action.setAttribute("data-busy", "1");
+    else action.removeAttribute("data-busy");
+  }
+
+  function openCatalog() {
+    if (catalogOpen) return;
+    catalogOpen = true;
+    catalogBusy = false;
+    selectedCatalogIndex = 0;
+    catalogElement.hidden = false;
+    catalogMessage("Loading apps…");
+    requestText(CATALOG_URL, function (text) {
+      var items;
+      if (!catalogOpen) return;
+      try {
+        items = parseCatalog(text);
+      } catch (error) {
+        catalogMessage("The catalog could not be read.");
+        return;
+      }
+      renderCatalog(items);
+    }, function (message) {
+      if (catalogOpen) catalogMessage(message);
+    });
+  }
+
+  function closeCatalog() {
+    catalogOpen = false;
+    catalogElement.hidden = true;
+    selectHeader(selectedHeaderIndex, true);
+  }
+
+  function installCatalogItem(index) {
+    var item = catalogItems[index];
+    var manifest;
+    if (!item || catalogBusy) return;
+    manifest = item.manifest;
+    catalogBusy = true;
+    setCatalogAction(index, "Installing…", true);
+    lunaSubscribe(
+      "luna://org.webosbrew.hbchannel.service/install",
+      {
+        ipkUrl: manifest.ipkUrl,
+        ipkHash: manifest.ipkHash.sha256,
+        subscribe: true
+      },
+      function (response) {
+        if (response.statusText) setCatalogAction(index, String(response.statusText).slice(0, 22), true);
+        if (!response.finished) return false;
+        catalogBusy = false;
+        setCatalogAction(index, "Installed", false);
+        loadApps();
+        return true;
+      },
+      function (message) {
+        catalogBusy = false;
+        setCatalogAction(index, "Failed", false);
+        showNotice(item.title + " did not install.\n" + message);
+        window.setTimeout(hideNotice, 3200);
+      }
+    );
+  }
+
+  function lunaSubscribe(uri, payload, onUpdate, onFailure) {
+    var bridge;
+    var settled = false;
+    var timer;
+    function finish() {
+      var index;
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      index = activeBridges.indexOf(bridge);
+      if (index !== -1) activeBridges.splice(index, 1);
+      try {
+        bridge.cancel();
+      } catch (error) {
+        /* The call has already ended. */
+      }
+    }
+    if (typeof window.PalmServiceBridge !== "function") {
+      onFailure("PalmServiceBridge is unavailable. Run this app on an LG webOS TV.");
+      return;
+    }
+    bridge = new window.PalmServiceBridge();
+    activeBridges.push(bridge);
+    timer = window.setTimeout(function () {
+      finish();
+      onFailure("The install took too long.");
+    }, 180000);
+    bridge.onservicecallback = function (rawResponse) {
+      var response;
+      var done;
+      try {
+        response = JSON.parse(rawResponse || "{}");
+      } catch (error) {
+        finish();
+        onFailure("The TV returned an invalid response.");
+        return;
+      }
+      if (response.returnValue === false) {
+        finish();
+        onFailure(response.errorText || "The TV rejected the request.");
+        return;
+      }
+      done = onUpdate(response);
+      if (done) finish();
+    };
+    try {
+      bridge.call(uri, JSON.stringify(payload || {}));
+    } catch (error) {
+      finish();
+      onFailure(error && error.message ? error.message : "Unable to contact webOS.");
+    }
+  }
+
   function lunaCall(uri, payload, onSuccess, onFailure) {
     if (typeof window.PalmServiceBridge !== "function") {
       onFailure("PalmServiceBridge is unavailable. Run this app on an LG webOS TV.");
@@ -1476,7 +1749,8 @@
     }
 
     hideStatus();
-    select(selectedIndex, true);
+    select(selectedIndex, !catalogOpen);
+    if (catalogOpen) updateCatalogActions();
   }
 
   function renderResponse(response) {
@@ -1910,6 +2184,24 @@
       return;
     }
 
+    if (catalogOpen) {
+      if (key === "ArrowUp" || code === 38) {
+        event.preventDefault();
+        selectCatalog(selectedCatalogIndex - 1, true);
+      } else if (key === "ArrowDown" || code === 40) {
+        event.preventDefault();
+        selectCatalog(selectedCatalogIndex + 1, true);
+      } else if (key === "Enter" || code === 13) {
+        event.preventDefault();
+        suppressEnterUp = true;
+        installCatalogItem(selectedCatalogIndex);
+      } else if (key === "Escape" || key === "Backspace" || code === 27 || code === 8 || code === 461) {
+        event.preventDefault();
+        closeCatalog();
+      }
+      return;
+    }
+
     if (hiddenAppsOpen) {
       if (key === "ArrowUp" || code === 38) {
         event.preventDefault();
@@ -2060,6 +2352,7 @@
     if (!document.hidden) {
       updateClock();
       if (customTextEditorOpen) selectTextEditorControl(selectedTextEditorIndex, true);
+      else if (catalogOpen) selectCatalog(selectedCatalogIndex, true);
       else if (hiddenAppsOpen) selectHiddenApp(selectedHiddenAppIndex, true);
       else if (settingsOpen) selectSetting(selectedSettingsIndex, true);
       else if (selectedArea === "header") selectHeader(selectedHeaderIndex, true);
