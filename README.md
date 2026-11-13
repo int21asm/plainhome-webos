@@ -1,3 +1,5 @@
+On LG TVs with a **Power On Screen** setting, choose **Recent Input** in **All Settings > General > System > Additional Settings > Home Settings** to stop LG Home from automatically opening alongside PlainHome at startup. Keep PlainHome's startup option enabled. The TV may briefly show the last input while PlainHome starts.
+
 # PlainHome
 
 A deliberately minimal launcher for LG webOS TVs:
@@ -68,6 +70,8 @@ The startup, Home-button, and remote-shortcut features are disabled until enable
 ### Startup and Home-button hook
 
 The startup option subscribes to webOS power-state changes; it does not poll continuously. At a full boot it launches PlainHome with bounded retries, stopping as soon as webOS confirms a successful launch. On a real suspend-to-active transition it launches PlainHome again. Screen-saver transitions are ignored so watching a video does not unexpectedly return to the launcher.
+
+Select **TV Settings** in the top bar to open LG's native settings. Use **Config** for PlainHome preferences.
 
 The Home-button option starts a read-only Linux input watcher as root. It:
 
