@@ -2,7 +2,7 @@
   "use strict";
 
   var APP_ID = "com.github.int21asm.plainhome";
-  var APP_VERSION = "0.1.40";
+  var APP_VERSION = "0.1.41";
   var COLUMNS = 6;
   var ORDER_KEY = "plainHomeOrderV1";
   var TIME_FORMAT_KEY = "plainHomeTimeFormatV1";
