@@ -45,7 +45,7 @@ body {
   height: 124%;
   object-fit: cover;
   opacity: 0;
-  filter: blur(28px);
+  filter: blur(72px);
 }
 
 #focus-backdrop img.is-shown {
@@ -60,7 +60,7 @@ body {
   right: 0;
   bottom: 0;
   left: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.72);
 }
 
 body {
